@@ -16,12 +16,12 @@ class LoanController extends Controller {
     }
     
     public function index() {
-        // Manejar petición AJAX de consulta de préstamos
+        // Manejar petición AJAX de consulta de préstamos (como dash_loan.php)
         if ($_POST && isset($_POST['consult_loan'])) {
-            $consultLoan = $this->sanitize($_POST['consult_loan']);
+            $consult_loan = strip_tags($_POST['consult_loan']);
             
-            if (!empty($consultLoan)) {
-                echo $this->consultarPrestamos($consultLoan);
+            if (!empty($consult_loan)) {
+                echo $this->consultarPrestamos($consult_loan);
                 exit(); // Terminar ejecución para AJAX
             }
         }
@@ -45,11 +45,24 @@ class LoanController extends Controller {
         $row_name = !empty($row_name_result) ? $row_name_result[0] : null;
         
         if ($row_name) {
-            $output .= "<br>";
-            $output .= '<h4 class="h4">Prestamos del usuario: </h4>';
-            $output .= "<br>";
-            $output .= '<h3 class="h3">' . htmlspecialchars($row_name["hab_name"]) . "</h3>";
-            $output .= "<br>";
+            $output .= '<div class="card mb-4">';
+            $output .= '<div class="card-header bg-primary text-white">';
+            $output .= '<h4 class="mb-0"><i class="fa fa-user-circle"></i> Préstamos del Usuario</h4>';
+            $output .= '</div>';
+            $output .= '<div class="card-body">';
+            $output .= '<h3 class="text-primary"><i class="fa fa-user"></i> ' . htmlspecialchars($row_name["hab_name"]) . '</h3>';
+            $output .= '<p class="text-muted"><i class="fa fa-credit-card"></i> RFID: <strong>' . htmlspecialchars($consult_loan) . '</strong></p>';
+            $output .= '</div>';
+            $output .= '</div>';
+        } else {
+            // Usuario no encontrado
+            $output .= '<div class="alert alert-warning text-center">';
+            $output .= '<i class="fa fa-exclamation-triangle fa-2x text-warning mb-3"></i><br>';
+            $output .= '<h4 class="text-warning">Usuario no encontrado</h4>';
+            $output .= '<p class="mb-0">No se encontró un usuario registrado con el RFID: <strong>' . htmlspecialchars($consult_loan) . '</strong><br>';
+            $output .= '<small class="text-muted">Verifica que la tarjeta esté registrada en el sistema.</small></p>';
+            $output .= '</div>';
+            return $output; // Salir temprano si no hay usuario
         }
         
         // Consultar préstamos
@@ -67,15 +80,64 @@ class LoanController extends Controller {
             }
         }
         
-        // Generar tabla de préstamos
-        if ($filtered_loans) {
-            $output .= '<table class="table table-striped b-t">';
-            $output .= '<thead>';
+        // Contar préstamos activos
+        $prestamos_activos = 0;
+        foreach ($filtered_loans as $loan) {
+            if($loan["loans_state"]=='1'){
+                $equip_rfid = $loan["equipments_rfid"];
+                $loan_date = $loan["loans_date"];
+                $check_result = $this->db->query("SELECT * FROM `habslab` WHERE 
+                                 `equipments_rfid` = ? AND 
+                                 `loans_state` = '0' AND 
+                                 `loans_date` > ? 
+                                 ORDER BY `loans_date` DESC LIMIT 1", [$equip_rfid, $loan_date]);
+                if (empty($check_result)) {
+                    $prestamos_activos++;
+                }
+            }
+        }
+        
+        // Generar tabla de préstamos con mejor estética
+        if ($filtered_loans && $prestamos_activos > 0) {
+            // Agregar estilos CSS para animaciones
+            $output .= '<style>
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .pulse {
+                    animation: pulse 2s infinite;
+                }
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.7; }
+                    100% { opacity: 1; }
+                }
+                .table-hover tbody tr:hover {
+                    background-color: #f8f9fa !important;
+                    transform: scale(1.01);
+                    transition: all 0.2s ease;
+                }
+                .badge-pill {
+                    font-size: 0.8em;
+                    padding: 0.4em 0.8em;
+                }
+            </style>';
+            
+            $output .= '<div class="card shadow-sm">';
+            $output .= '<div class="card-header bg-success text-white">';
+            $output .= '<h4 class="mb-0"><i class="fa fa-list-alt"></i> Equipos Prestados Actualmente <span class="badge badge-light">' . $prestamos_activos . '</span></h4>';
+            $output .= '<small><i class="fa fa-info-circle"></i> Lista de equipos que tienes en préstamo activo</small>';
+            $output .= '</div>';
+            $output .= '<div class="card-body p-0">';
+            $output .= '<div class="table-responsive">';
+            $output .= '<table class="table table-hover table-striped mb-0">';
+            $output .= '<thead class="bg-light">';
             $output .= '<tr>';
-            $output .= '<th>DATE</th>';
-            $output .= '<th>EQUIPMENT</th>';
-            $output .= '<th>BRANCH</th>';
-            $output .= '<th>STATE</th>';
+            $output .= '<th><i class="fa fa-calendar text-primary"></i> FECHA PRÉSTAMO</th>';
+            $output .= '<th><i class="fa fa-cube text-success"></i> EQUIPO</th>';
+            $output .= '<th><i class="fa fa-tag text-info"></i> MARCA</th>';
+            $output .= '<th><i class="fa fa-check-circle text-warning"></i> ESTADO</th>';
             $output .= '</tr>';
             $output .= '</thead>';
             $output .= '<tbody>';
@@ -95,11 +157,32 @@ class LoanController extends Controller {
                     
                     // Si no hay devolución más reciente, mostrar como prestado
                     if (empty($check_result)) {
-                        $output .= '<tr>';
-                        $output .= "<td>" . htmlspecialchars($loan["loans_date"]) . "</td>";
-                        $output .= "<td>" . htmlspecialchars($loan["equipments_name"]) . "</td>";
-                        $output .= "<td>" . htmlspecialchars($loan["equipments_brand"]) . "</td>";
-                        $output .= "<td>Prestado</td>";
+                        $fecha_formateada = date('d/m/Y H:i', strtotime($loan["loans_date"]));
+                        $tiempo_transcurrido = $this->calcularTiempoTranscurrido($loan["loans_date"]);
+                        
+                        $output .= '<tr class="table-warning" style="animation: fadeIn 0.5s ease-in;">';
+                        $output .= '<td>';
+                        $output .= '<div class="d-flex flex-column">';
+                        $output .= '<strong class="text-dark">' . $fecha_formateada . '</strong>';
+                        $output .= '<small class="text-muted"><i class="fa fa-clock-o"></i> ' . $tiempo_transcurrido . '</small>';
+                        $output .= '</div>';
+                        $output .= '</td>';
+                        $output .= '<td>';
+                        $output .= '<div class="d-flex align-items-center">';
+                        $output .= '<i class="fa fa-cog text-primary mr-2"></i>';
+                        $output .= '<span class="font-weight-bold">' . htmlspecialchars($loan["equipments_name"]) . '</span>';
+                        $output .= '</div>';
+                        $output .= '</td>';
+                        $output .= '<td>';
+                        $output .= '<span class="badge badge-info badge-pill">';
+                        $output .= '<i class="fa fa-industry mr-1"></i>' . htmlspecialchars($loan["equipments_brand"]);
+                        $output .= '</span>';
+                        $output .= '</td>';
+                        $output .= '<td>';
+                        $output .= '<span class="badge badge-warning badge-pill pulse">';
+                        $output .= '<i class="fa fa-exclamation-triangle mr-1"></i>EN PRÉSTAMO';
+                        $output .= '</span>';
+                        $output .= '</td>';
                         $output .= '</tr>';
                     }
                 }
@@ -107,11 +190,48 @@ class LoanController extends Controller {
             
             $output .= '</tbody>';
             $output .= '</table>';
+            $output .= '</div>'; // table-responsive
+            $output .= '</div>'; // card-body
+            $output .= '<div class="card-footer bg-light">';
+            $output .= '<div class="row">';
+            $output .= '<div class="col-md-6">';
+            $output .= '<small class="text-muted"><i class="fa fa-lightbulb-o"></i> <strong>Tip:</strong> Acerca la tarjeta al lector para devolver equipos</small>';
+            $output .= '</div>';
+            $output .= '<div class="col-md-6 text-right">';
+            $output .= '<small class="text-success"><i class="fa fa-check-circle"></i> Total equipos prestados: <strong>' . $prestamos_activos . '</strong></small>';
+            $output .= '</div>';
+            $output .= '</div>';
+            $output .= '</div>'; // card-footer
+            $output .= '</div>'; // card
         } else {
-            $output .= '<div class="alert alert-info">No se encontraron préstamos para esta tarjeta.</div>';
+            $output .= '<div class="alert alert-success text-center">';
+            $output .= '<i class="fa fa-check-circle fa-3x text-success mb-3"></i><br>';
+            $output .= '<h4 class="text-success">¡Excelente!</h4>';
+            $output .= '<p class="mb-0">No tienes equipos pendientes de devolución.<br>';
+            $output .= '<small class="text-muted">Puedes solicitar nuevos préstamos cuando lo necesites.</small></p>';
+            $output .= '</div>';
         }
         
         return $output;
+    }
+    
+    /**
+     * Calcula el tiempo transcurrido desde una fecha dada
+     */
+    private function calcularTiempoTranscurrido($fecha) {
+        $ahora = new DateTime();
+        $fecha_prestamo = new DateTime($fecha);
+        $diferencia = $ahora->diff($fecha_prestamo);
+        
+        if ($diferencia->days > 0) {
+            return $diferencia->days . ' día' . ($diferencia->days > 1 ? 's' : '') . ' ago';
+        } elseif ($diferencia->h > 0) {
+            return $diferencia->h . ' hora' . ($diferencia->h > 1 ? 's' : '') . ' ago';
+        } elseif ($diferencia->i > 0) {
+            return $diferencia->i . ' minuto' . ($diferencia->i > 1 ? 's' : '') . ' ago';
+        } else {
+            return 'Hace un momento';
+        }
     }
     
     public function history() {
