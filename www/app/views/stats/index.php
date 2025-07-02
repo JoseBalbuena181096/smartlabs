@@ -145,9 +145,91 @@ include __DIR__ . '/../layout/header.php';
 
               <!-- Resultados de estadísticas -->
               <?php if (!empty($usersTrafficDevice)): ?>
+                <?php
+                // Inicializar variables antes de usar
+                $totalTime = 0;
+                $sessionCount = 0;
+                
+                // CALCULAR TIEMPO TOTAL ANTES DE MOSTRAR
+                // Ordenar todos los registros por fecha
+                usort($usersTrafficDevice, function($a, $b) {
+                    return strtotime($a['traffic_date']) - strtotime($b['traffic_date']);
+                });
+                
+                // Procesar registros para calcular tiempo total
+                $currentEntry = null;
+                foreach ($usersTrafficDevice as $traffic) {
+                    if ($traffic['traffic_state'] == 1) {
+                        // SE PRENDE - guardar tiempo de inicio
+                        $currentEntry = $traffic;
+                    } else {
+                        // SE APAGA - calcular duración si hay entrada previa
+                        if ($currentEntry !== null) {
+                            $timeStart = new DateTime($currentEntry['traffic_date']);
+                            $timeEnd = new DateTime($traffic['traffic_date']);
+                            $diff = $timeStart->diff($timeEnd);
+                            
+                            $totalMinutes = ($diff->days * 24 * 60) + ($diff->h * 60) + $diff->i;
+                            $totalSeconds = $diff->s;
+                            
+                            if ($totalMinutes >= 1 || $totalSeconds >= 30) {
+                                $totalTime += $totalMinutes;
+                                $sessionCount++;
+                            }
+                            
+                            $currentEntry = null;
+                        }
+                    }
+                }
+                ?>
+                <!-- Resumen ejecutivo -->
+                <div class="card mb-3">
+                  <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0"><i class="fa fa-dashboard"></i> Resumen Ejecutivo</h4>
+                    <small>Vista rápida de la actividad del dispositivo</small>
+                  </div>
+                  <div class="card-body">
+                    <div class="row">
+                      <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                          <div class="card-body text-center">
+                            <h2><i class="fa fa-users"></i> <?php 
+                              $uniqueUsers = array_unique(array_column($usersTrafficDevice, 'traffic_hab_id'));
+                              echo count($uniqueUsers); 
+                            ?></h2>
+                            <p class="mb-0">Usuarios Únicos</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="card bg-info text-white">
+                          <div class="card-body text-center">
+                            <h2><i class="fa fa-exchange"></i> <?php echo count($usersTrafficDevice); ?></h2>
+                            <p class="mb-0">Total de Accesos</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                          <div class="card-body text-center">
+                            <h2><i class="fa fa-clock-o"></i> <span id="totalTimePreview"><?php 
+                              if (!empty($usersTrafficDevice)) {
+                                  echo intval($totalTime / 60) . 'h ' . intval($totalTime % 60) . 'm';
+                              } else {
+                                  echo '0h 0m';
+                              }
+                            ?></span></h2>
+                            <p class="mb-0">Tiempo Total de Uso</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
                 <div class="card">
                   <div class="card-header bg-success text-white">
-                    <h4 class="mb-0"><i class="fa fa-chart-bar"></i> Resultados de Estadísticas</h4>
+                    <h4 class="mb-0"><i class="fa fa-chart-bar"></i> Detalle de Registros</h4>
                     <small>
                       Dispositivo: <strong><?php echo htmlspecialchars($_GET['serie_device']); ?></strong> | 
                       Periodo: <?php echo date('d/m/Y H:i', strtotime($_GET['start_date'])); ?> - <?php echo date('d/m/Y H:i', strtotime($_GET['end_date'])); ?>
@@ -172,23 +254,76 @@ include __DIR__ . '/../layout/header.php';
                         </thead>
                         <tbody>
                           <?php 
-                          $totalTime = 0;
-                          $sessionCount = 0;
-                          $previousEntry = null;
+                          // ============================================
+                          // LÓGICA SIMPLE: ENCENDIDO → APAGADO = DURACIÓN
+                          // ============================================
                           
-                          foreach ($usersTrafficDevice as $index => $traffic): 
-                            // Calcular duración de sesión si es salida
-                            $duration = '';
-                            if (!$traffic['traffic_state'] && $previousEntry && $previousEntry['traffic_state'] && 
-                                $previousEntry['traffic_hab_id'] === $traffic['traffic_hab_id']) {
-                              $start = new DateTime($previousEntry['traffic_date']);
-                              $end = new DateTime($traffic['traffic_date']);
-                              $diff = $start->diff($end);
-                              $minutes = ($diff->h * 60) + $diff->i;
-                              $duration = $diff->format('%H:%I:%S') . " ({$minutes} min)";
-                              $totalTime += $minutes;
-                              $sessionCount++;
-                            }
+                          $totalTime = 0; // En minutos
+                          $sessionCount = 0;
+                          $trafficWithDurations = [];
+                          
+                          // PASO 1: Ordenar todos los registros por fecha
+                          usort($usersTrafficDevice, function($a, $b) {
+                              return strtotime($a['traffic_date']) - strtotime($b['traffic_date']);
+                          });
+                          
+                          // PASO 2: Procesar registros de forma secuencial
+                          $currentEntry = null; // Guardar el último ENCENDIDO
+                          
+                          foreach ($usersTrafficDevice as $traffic) {
+                              $duration = '';
+                              $totalMinutes = 0;
+                              
+                              if ($traffic['traffic_state'] == 1) {
+                                  // SE PRENDE - guardar tiempo de inicio
+                                  $currentEntry = $traffic;
+                                  $traffic['calculated_duration'] = '';
+                                  $traffic['duration_minutes'] = 0;
+                              } else {
+                                  // SE APAGA - calcular duración si hay entrada previa
+                                  if ($currentEntry !== null) {
+                                      $timeStart = new DateTime($currentEntry['traffic_date']);
+                                      $timeEnd = new DateTime($traffic['traffic_date']);
+                                      $diff = $timeStart->diff($timeEnd);
+                                      
+                                      // Calcular duración total en minutos SIMPLE
+                                      $totalMinutes = ($diff->days * 24 * 60) + ($diff->h * 60) + $diff->i;
+                                      $totalSeconds = $diff->s;
+                                      
+                                      if ($totalMinutes >= 1 || $totalSeconds >= 30) { // Al menos 30 segundos
+                                          $hours = intval($totalMinutes / 60);
+                                          $minutes = $totalMinutes % 60;
+                                          $duration = sprintf('%02d:%02d:%02d', 
+                                                            $hours, 
+                                                            $minutes, 
+                                                            $totalSeconds);
+                                          
+                                          // SUMAR al tiempo total - SOLO MINUTOS ENTEROS
+                                          $totalTime += $totalMinutes;
+                                          $sessionCount++;
+                                      }
+                                      
+                                      // Actualizar la entrada anterior con la duración calculada
+                                      if (count($trafficWithDurations) > 0) {
+                                          $lastIndex = count($trafficWithDurations) - 1;
+                                          if ($trafficWithDurations[$lastIndex]['traffic_state'] == 1) {
+                                              $trafficWithDurations[$lastIndex]['calculated_duration'] = $duration;
+                                              $trafficWithDurations[$lastIndex]['duration_minutes'] = $totalMinutes;
+                                          }
+                                      }
+                                      
+                                      $currentEntry = null; // Resetear entrada actual
+                                  }
+                                  
+                                  $traffic['calculated_duration'] = $duration;
+                                  $traffic['duration_minutes'] = $totalMinutes;
+                              }
+                              
+                              $trafficWithDurations[] = $traffic;
+                          }
+                          
+                          // PASO 3: Mostrar los resultados
+                          foreach ($trafficWithDurations as $index => $traffic): 
                           ?>
                             <tr class="<?php echo $traffic['traffic_state'] ? 'table-success' : 'table-warning'; ?>">
                               <td>
@@ -197,6 +332,13 @@ include __DIR__ . '/../layout/header.php';
                               </td>
                               <td>
                                 <strong><?php echo htmlspecialchars($traffic['hab_name']); ?></strong>
+                                <?php if (!empty($traffic['calculated_duration'])): ?>
+                                  <br><small class="badge badge-success">Sesión completa</small>
+                                <?php elseif ($traffic['traffic_state']): ?>
+                                  <br><small class="badge badge-warning">Sesión abierta</small>
+                                <?php else: ?>
+                                  <br><small class="badge badge-secondary">Sin entrada</small>
+                                <?php endif; ?>
                               </td>
                               <td>
                                 <span class="badge badge-info"><?php echo htmlspecialchars($traffic['hab_registration']); ?></span>
@@ -219,17 +361,22 @@ include __DIR__ . '/../layout/header.php';
                                 <code><?php echo htmlspecialchars($traffic['traffic_device']); ?></code>
                               </td>
                               <td>
-                                <?php if ($duration): ?>
-                                  <strong class="text-success"><?php echo $duration; ?></strong>
+                                <?php if (!empty($traffic['calculated_duration'])): ?>
+                                  <strong class="text-success">
+                                    <i class="fa fa-clock-o"></i> <?php echo $traffic['calculated_duration']; ?>
+                                  </strong>
+                                <?php elseif ($traffic['traffic_state']): ?>
+                                  <span class="text-primary">
+                                    <i class="fa fa-hourglass-start"></i> Sesión abierta
+                                  </span>
                                 <?php else: ?>
-                                  <span class="text-muted">-</span>
+                                  <span class="text-muted">
+                                    <i class="fa fa-minus"></i> Sin entrada previa
+                                  </span>
                                 <?php endif; ?>
                               </td>
                             </tr>
-                          <?php 
-                            $previousEntry = $traffic;
-                          endforeach; 
-                          ?>
+                          <?php endforeach; ?>
                         </tbody>
                       </table>
                     </div>
@@ -267,7 +414,11 @@ include __DIR__ . '/../layout/header.php';
                         <div class="box bg-info text-white">
                           <div class="box-body text-center">
                             <i class="fa fa-clock-o fa-2x"></i>
-                            <h3><?php echo floor($totalTime / 60) . 'h ' . ($totalTime % 60) . 'm'; ?></h3>
+                            <h3><?php 
+                              $totalHours = intval(floor($totalTime / 60));
+                              $totalMins = intval(round($totalTime % 60));
+                              echo $totalHours . 'h ' . $totalMins . 'm'; 
+                            ?></h3>
                             <p>Tiempo Total de Uso</p>
                           </div>
                         </div>
@@ -279,18 +430,33 @@ include __DIR__ . '/../layout/header.php';
                       <i class="fa fa-info-circle"></i>
                       <strong>Información:</strong>
                       Se encontraron <strong><?php echo $sessionCount; ?> sesiones completas</strong> de uso del dispositivo.
-                      El tiempo total de uso calculado es de <strong><?php echo floor($totalTime / 60); ?> horas y <?php echo $totalTime % 60; ?> minutos</strong>.
+                      El tiempo total de uso calculado es de <strong><?php echo intval(floor($totalTime / 60)); ?> horas y <?php echo intval(round($totalTime % 60)); ?> minutos</strong>.
+                      <br><small class="text-muted">
+                        <i class="fa fa-lightbulb-o"></i> 
+                        <strong>Nota:</strong> Solo se contabilizan sesiones con entrada y salida válidas. 
+                        Las sesiones abiertas (sin salida) no se incluyen en el tiempo total.
+                      </small>
                     </div>
                   </div>
                 </div>
                 
               <?php elseif (isset($_GET['serie_device']) && !empty($_GET['serie_device'])): ?>
+                <?php
+                // Inicializar variables cuando no hay datos
+                $totalTime = 0;
+                $sessionCount = 0;
+                ?>
                 <div class="alert alert-warning">
                   <i class="fa fa-exclamation-triangle"></i>
                   <strong>Sin datos</strong><br>
                   No se encontraron registros para los filtros aplicados.
                 </div>
               <?php else: ?>
+                <?php
+                // Inicializar variables por defecto
+                $totalTime = 0;
+                $sessionCount = 0;
+                ?>
                 <div class="alert alert-info text-center">
                   <i class="fa fa-info-circle fa-2x mb-2"></i><br>
                   <strong>Generador de Estadísticas SMARTLABS</strong><br>
@@ -409,6 +575,8 @@ $(document).ready(function() {
         $('#start_date').val(oneMonthAgo.toISOString().slice(0, 16));
         $('#end_date').val(now.toISOString().slice(0, 16));
     }
+    
+    // Tiempo total se muestra directamente desde PHP
 });
 
 function clearFilters() {
