@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Sistema MVC funcionando desde la raíz
+# Servir archivos estáticos desde public/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_URI} ^/(js|css|images|assets|audio)/
+RewriteRule ^(.*)$ public/$1 [L]
+
+# Redireccionar todas las URLs a index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/(legacy|node|hardware|database|js|css|images|assets|audio)/
+RewriteRule ^(.*)$ index.php?url=$1 [L,QSA] 
