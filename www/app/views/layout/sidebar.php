@@ -60,6 +60,15 @@
               </li>
 
               <li>
+                <a href="/LoanAdmin">
+                  <span class="nav-icon">
+                    <i class="fa fa-user-cog"></i>
+                  </span>
+                  <span class="nav-text">Admin Préstamos</span>
+                </a>
+              </li>
+
+              <li>
                 <a href="/Stats">
                   <span class="nav-icon">
                     <i class="fa fa-bar-chart"></i>
