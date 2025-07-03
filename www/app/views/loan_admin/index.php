@@ -251,6 +251,73 @@ include __DIR__ . '/../layout/header.php';
     cursor: not-allowed;
   }
   
+  /* Estilos para el estado de exportación */
+  .exporting-state {
+    transition: all 0.3s ease;
+    background-color: #f8f9fa !important;
+    border-color: #dee2e6 !important;
+    color: #6c757d !important;
+  }
+  
+  .search-card-admin.exporting-state {
+    background-color: #f8f9fa !important;
+    border-color: #dee2e6 !important;
+    position: relative;
+  }
+  
+  .search-card-admin.exporting-state::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 249, 250, 0.8);
+    z-index: 1;
+    border-radius: 0.375rem;
+  }
+  
+  /* Animación de pulso para iconos de carga */
+  .fa-spin {
+    animation: fa-spin 1s infinite linear;
+  }
+  
+  .loading-pulse {
+    animation: loading-pulse 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes loading-pulse {
+    0% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(1.05);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  /* Estilo para mensaje de éxito con información detallada */
+  .export-success-message {
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+    border: 1px solid #c3e6cb;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-top: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  .export-success-message small {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #155724;
+  }
+  
   /* Animación de carga para el proceso de exportación */
   .exporting-state {
     position: relative;
@@ -594,26 +661,8 @@ function mostrarTodosLosPrestamos() {
     });
 }
 
-// Exportar CSV - Descarga directa en la misma vista
+// Exportar CSV - Nueva implementación con AJAX y descarga en la misma ventana
 function exportarCSV() {
-    // Mostrar loading en el botón
-    $('#exportCSVBtn').html('<i class="fa fa-spinner fa-spin mr-2"></i>GENERANDO CSV...');
-    $('#exportCSVBtn').prop('disabled', true);
-    
-    // Deshabilitar búsquedas y otros botones durante la exportación
-    $('#userSearchAdmin').prop('disabled', true).attr('placeholder', 'Exportando CSV... Espera por favor').addClass('exporting-state');
-    $('#searchBtnAdmin').prop('disabled', true);
-    $('#showAllLoansBtn').prop('disabled', true);
-    
-    // Agregar overlay visual a la sección de búsqueda
-    $('.search-card-admin').addClass('exporting-state').css({
-        'pointer-events': 'none',
-        'opacity': '0.7'
-    });
-    
-    // Mostrar mensaje de proceso con animación más visible
-    $('#display_new_access').html('<span class="text-info"><i class="fa fa-cog fa-spin fa-2x"></i> <strong>Generando archivo CSV...</strong> La descarga iniciará automáticamente</span>');
-    
     // Función para restaurar todo al estado normal
     function restaurarTodo() {
         $('#exportCSVBtn').html('<i class="fa fa-download mr-2"></i>EXPORTAR CSV');
@@ -633,58 +682,122 @@ function exportarCSV() {
         console.log("Exportación completada y controles restaurados");
     }
     
-    try {
-        // Crear iframe oculto para descarga sin abrir ventana
-        var iframe = $('<iframe></iframe>');
-        iframe.attr({
-            id: 'csvDownloadFrame',
-            style: 'display: none; width: 0; height: 0;',
-            src: 'about:blank'
-        });
-        $('body').append(iframe);
-        
-        // Crear formulario que apunta al iframe oculto
-        var form = $('<form></form>');
-        form.attr({
-            method: 'POST',
-            action: '/LoanAdmin/index',
-            target: 'csvDownloadFrame',
-            style: 'display: none;'
-        });
-        
-        // Agregar campo hidden
-        form.append('<input type="hidden" name="export_csv" value="true">');
-        
-        // Agregar formulario al body
-        $('body').append(form);
-        
-        // Enviar formulario para iniciar descarga
-        setTimeout(function() {
-            form.submit();
+    // Función para crear y descargar el archivo CSV
+    function descargarCSV(filename, content) {
+        try {
+            // Decodificar el contenido base64
+            var binaryString = atob(content);
+            var bytes = new Uint8Array(binaryString.length);
+            for (var i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
             
-            // Actualizar mensaje en la misma vista
-            $('#display_new_access').html('<span class="text-warning"><i class="fa fa-download fa-2x"></i> <strong>Descarga iniciada...</strong> Revisa tu carpeta de descargas</span>');
+            // Crear blob con el contenido CSV
+            var blob = new Blob([bytes], { type: 'text/csv;charset=utf-8;' });
             
-            // Restaurar controles después de 3 segundos
-            setTimeout(function() {
-                $('#display_new_access').html('<span class="text-success"><i class="fa fa-check-circle"></i> ¡Archivo CSV descargado exitosamente! Revisa tu carpeta de descargas - ' + new Date().toLocaleTimeString() + '</span>');
-                
-                // Restaurar todo
-                restaurarTodo();
-                
-                // Limpiar elementos temporales
-                $('#csvDownloadFrame').remove();
-                form.remove();
-                
-            }, 3000); // 3 segundos para completar descarga
+            // Crear enlace temporal para descarga
+            var link = document.createElement('a');
+            var url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
             
-        }, 500); // Esperar 500ms antes de enviar formulario
-        
-    } catch (error) {
-        console.error('Error al exportar CSV:', error);
-        $('#display_new_access').html('<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> Error al iniciar la descarga del CSV</span>');
-        restaurarTodo();
+            // Agregar al DOM, hacer click y remover
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Liberar recursos
+            URL.revokeObjectURL(url);
+            
+            return true;
+        } catch (error) {
+            console.error('Error al crear el archivo CSV:', error);
+            return false;
+        }
     }
+    
+    // Inicializar estados de loading
+    $('#exportCSVBtn').html('<i class="fa fa-spinner fa-spin mr-2"></i>GENERANDO CSV...');
+    $('#exportCSVBtn').prop('disabled', true);
+    
+    // Deshabilitar búsquedas y otros botones durante la exportación
+    $('#userSearchAdmin').prop('disabled', true).attr('placeholder', 'Exportando CSV... Espera por favor').addClass('exporting-state');
+    $('#searchBtnAdmin').prop('disabled', true);
+    $('#showAllLoansBtn').prop('disabled', true);
+    
+    // Agregar overlay visual a la sección de búsqueda
+    $('.search-card-admin').addClass('exporting-state').css({
+        'pointer-events': 'none',
+        'opacity': '0.7'
+    });
+    
+                 // Mostrar mensaje de proceso con animación más visible
+             $('#display_new_access').html('<span class="text-info"><i class="fa fa-cog fa-spin fa-2x"></i> <strong>Generando archivo CSV...</strong> Este proceso puede tomar hasta 10 minutos. Por favor espera.</span>');
+    
+                 // Realizar petición AJAX para obtener el CSV
+             $.ajax({
+                 url: '/LoanAdmin/index',
+                 method: 'POST',
+                 data: { generate_csv_json: true },
+                 dataType: 'json',
+                 timeout: 600000, // 10 minutos timeout
+        success: function(response) {
+            if (response.success) {
+                // Actualizar mensaje
+                $('#display_new_access').html('<span class="text-warning"><i class="fa fa-download fa-2x"></i> <strong>Descarga iniciada...</strong> Preparando archivo</span>');
+                
+                // Simular un pequeño delay para mostrar el mensaje
+                setTimeout(function() {
+                    // Intentar descargar el archivo
+                    var downloadSuccess = descargarCSV(response.filename, response.content);
+                    
+                    if (downloadSuccess) {
+                                                         // Mostrar mensaje de éxito con información del archivo
+                                 var fileSize = response.file_size ? (response.file_size / 1024).toFixed(2) + ' KB' : 'N/A';
+                                 $('#display_new_access').html('<span class="text-success"><i class="fa fa-check-circle"></i> ¡Archivo CSV descargado exitosamente! <br><small>Archivo: <strong>' + response.filename + '</strong> | Registros: <strong>' + response.total_records + '</strong> | Tamaño: <strong>' + fileSize + '</strong> | Hora: <strong>' + new Date().toLocaleTimeString() + '</strong></small></span>');
+                        
+                        // Mostrar notificación temporal adicional
+                        if (typeof toastr !== 'undefined') {
+                            toastr.success('CSV descargado exitosamente', 'Exportación completada', {
+                                timeOut: 5000,
+                                extendedTimeOut: 2000
+                            });
+                        }
+                    } else {
+                        $('#display_new_access').html('<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> Error al procesar el archivo CSV descargado</span>');
+                    }
+                    
+                    // Restaurar todo
+                    restaurarTodo();
+                }, 800); // Pequeño delay para mostrar el mensaje de descarga
+                
+                                 } else {
+                         var errorMsg = response.error ? response.error : 'Error desconocido al generar el archivo CSV';
+                         $('#display_new_access').html('<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> Error al generar el archivo CSV: ' + errorMsg + '</span>');
+                         restaurarTodo();
+                     }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error en la petición AJAX:', {
+                status: status,
+                error: error,
+                response: xhr.responseText
+            });
+            
+                                 var errorMessage = 'Error de conexión al generar el CSV';
+                     if (status === 'timeout') {
+                         errorMessage = 'El proceso tardó más de 10 minutos. El archivo puede ser muy grande. Contacta al administrador.';
+                     } else if (xhr.status === 500) {
+                         errorMessage = 'Error interno del servidor. Contacta al administrador.';
+                     } else if (xhr.status === 0) {
+                         errorMessage = 'No se pudo conectar al servidor. Verifica tu conexión a internet.';
+                     }
+            
+            $('#display_new_access').html('<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> ' + errorMessage + '</span>');
+            restaurarTodo();
+        }
+    });
 }
 
 // Event listeners para los nuevos botones

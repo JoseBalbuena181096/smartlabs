@@ -55,9 +55,15 @@ class LoanAdminController extends Controller {
                 exit();
             }
             
-            // Exportar CSV
+            // Exportar CSV (método tradicional)
             if (isset($_POST['export_csv'])) {
                 $this->exportarCSV();
+                exit();
+            }
+            
+            // Generar CSV como JSON para descarga AJAX
+            if (isset($_POST['generate_csv_json'])) {
+                $this->generarCSVJSON();
                 exit();
             }
         }
@@ -487,6 +493,141 @@ class LoanAdminController extends Controller {
             return $diferencia->h . 'h ' . $diferencia->i . 'm';
         } else {
             return $diferencia->i . ' minutos';
+        }
+    }
+
+    /**
+     * Generar CSV como respuesta JSON para descarga AJAX
+     */
+    private function generarCSVJSON() {
+        // Aumentar límite de memoria y tiempo de ejecución
+        ini_set('memory_limit', '256M');
+        set_time_limit(600); // 10 minutos
+        
+        try {
+            // Obtener todos los préstamos activos
+            $all_loans = $this->db->query("SELECT h.*, hab.hab_name, hab.hab_registration, hab.hab_email 
+                                           FROM habslab h 
+                                           JOIN cards c ON h.loans_hab_rfid = c.cards_number
+                                           JOIN habintants hab ON c.cards_id = hab.hab_card_id 
+                                           ORDER BY h.loans_date DESC");
+            
+            if (empty($all_loans)) {
+                // Si no hay préstamos, devolver CSV vacío
+                $response = [
+                    'success' => true,
+                    'filename' => 'prestamos_activos_' . date('Y-m-d_H-i-s') . '.csv',
+                    'content' => base64_encode("\xEF\xBB\xBF" . "USUARIO,MATRÍCULA,CORREO,FECHA_PRÉSTAMO,EQUIPO,MARCA,RFID_USUARIO,RFID_EQUIPO,TIEMPO_TRANSCURRIDO\n"),
+                    'total_records' => 0,
+                    'generated_at' => date('Y-m-d H:i:s')
+                ];
+                
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode($response);
+                exit();
+            }
+            
+            $active_loans = [];
+            $seen_equipments = [];
+            
+            foreach ($all_loans as $loan) {
+                $equipment_rfid = $loan['equipments_rfid'];
+                $user_rfid = $loan['loans_hab_rfid'];
+                $key = $equipment_rfid . '_' . $user_rfid;
+                
+                if (!isset($seen_equipments[$key])) {
+                    $seen_equipments[$key] = true;
+                    
+                    if ($loan["loans_state"] == '1') {
+                        $check_result = $this->db->query("SELECT * FROM `habslab` WHERE 
+                                         `equipments_rfid` = ? AND 
+                                         `loans_state` = '0' AND 
+                                         `loans_date` > ? 
+                                         ORDER BY `loans_date` DESC LIMIT 1", 
+                                         [$equipment_rfid, $loan["loans_date"]]);
+                        
+                        if (empty($check_result)) {
+                            $active_loans[] = $loan;
+                        }
+                    }
+                }
+            }
+            
+            // Crear un archivo temporal en memoria con mayor capacidad
+            $temp_file = fopen('php://temp/maxmemory:5242880', 'w'); // 5MB
+            
+            if (!$temp_file) {
+                throw new Exception('No se pudo crear el archivo temporal');
+            }
+            
+            // Escribir BOM para UTF-8
+            fwrite($temp_file, "\xEF\xBB\xBF");
+            
+            // Escribir headers
+            fputcsv($temp_file, [
+                'USUARIO',
+                'MATRÍCULA',
+                'CORREO',
+                'FECHA_PRÉSTAMO',
+                'EQUIPO',
+                'MARCA',
+                'RFID_USUARIO',
+                'RFID_EQUIPO',
+                'TIEMPO_TRANSCURRIDO'
+            ]);
+            
+            // Escribir datos
+            foreach ($active_loans as $loan) {
+                $tiempo_transcurrido = $this->calcularTiempoTranscurrido($loan["loans_date"]);
+                
+                fputcsv($temp_file, [
+                    $loan["hab_name"] ?? '',
+                    $loan["hab_registration"] ?? '',
+                    $loan["hab_email"] ?? '',
+                    $loan["loans_date"] ?? '',
+                    $loan["equipments_name"] ?? '',
+                    $loan["equipments_brand"] ?? '',
+                    $loan["loans_hab_rfid"] ?? '',
+                    $loan["equipments_rfid"] ?? '',
+                    $tiempo_transcurrido
+                ]);
+            }
+            
+            // Obtener el contenido del archivo
+            rewind($temp_file);
+            $csv_content = stream_get_contents($temp_file);
+            fclose($temp_file);
+            
+            if ($csv_content === false) {
+                throw new Exception('Error al leer el contenido del archivo CSV');
+            }
+            
+            // Preparar respuesta JSON
+            $filename = 'prestamos_activos_' . date('Y-m-d_H-i-s') . '.csv';
+            $response = [
+                'success' => true,
+                'filename' => $filename,
+                'content' => base64_encode($csv_content),
+                'total_records' => count($active_loans),
+                'generated_at' => date('Y-m-d H:i:s'),
+                'file_size' => strlen($csv_content)
+            ];
+            
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($response);
+            exit();
+            
+        } catch (Exception $e) {
+            // En caso de error, devolver respuesta de error
+            $error_response = [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'generated_at' => date('Y-m-d H:i:s')
+            ];
+            
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($error_response);
+            exit();
         }
     }
 }
