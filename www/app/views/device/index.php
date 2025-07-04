@@ -100,36 +100,67 @@ include __DIR__ . '/../layout/header.php';
                             <th><i class="fa fa-tag"></i> ALIAS</th>
                             <th><i class="fa fa-barcode"></i> NÚMERO DE SERIE</th>
                             <th><i class="fa fa-calendar"></i> FECHA REGISTRO</th>
-                            <th><i class="fa fa-user"></i> PROPIETARIO</th>
                             <th><i class="fa fa-cogs"></i> ACCIONES</th>
                           </tr>
                         </thead>
                         <tbody>
                           <?php foreach ($devices as $device): ?>
-                            <tr>
+                            <tr id="row-<?php echo $device['devices_id']; ?>">
                               <td><strong><?php echo htmlspecialchars($device['devices_id']); ?></strong></td>
                               <td>
-                                <span class="badge badge-info p-2">
+                                <!-- Vista normal -->
+                                <span class="badge badge-info p-2 view-mode" id="alias-view-<?php echo $device['devices_id']; ?>">
                                   <?php echo htmlspecialchars($device['devices_alias']); ?>
                                 </span>
+                                <!-- Vista edición -->
+                                <input type="text" 
+                                       class="form-control edit-mode" 
+                                       id="alias-edit-<?php echo $device['devices_id']; ?>"
+                                       value="<?php echo htmlspecialchars($device['devices_alias']); ?>"
+                                       style="display: none;">
                               </td>
                               <td>
-                                <code class="bg-light p-1"><?php echo htmlspecialchars($device['devices_serie']); ?></code>
+                                <!-- Vista normal -->
+                                <code class="bg-light p-1 view-mode" id="serie-view-<?php echo $device['devices_id']; ?>">
+                                  <?php echo htmlspecialchars($device['devices_serie']); ?>
+                                </code>
+                                <!-- Vista edición -->
+                                <input type="text" 
+                                       class="form-control edit-mode" 
+                                       id="serie-edit-<?php echo $device['devices_id']; ?>"
+                                       value="<?php echo htmlspecialchars($device['devices_serie']); ?>"
+                                       style="display: none;">
                               </td>
                               <td>
                                 <strong><?php echo date('d/m/Y', strtotime($device['devices_date'])); ?></strong><br>
                                 <small class="text-muted"><?php echo date('H:i:s', strtotime($device['devices_date'])); ?></small>
                               </td>
                               <td>
-                                <span class="badge badge-secondary">User ID: <?php echo htmlspecialchars($device['devices_user_id']); ?></span>
-                              </td>
-                              <td>
                                 <div class="btn-group" role="group">
-                                  <a href="/Device/edit/<?php echo $device['devices_id']; ?>" 
-                                     class="btn btn-sm btn-info" 
-                                     title="Editar dispositivo">
+                                  <!-- Botones modo vista -->
+                                  <button type="button" 
+                                          class="btn btn-sm btn-info view-mode" 
+                                          onclick="enableEdit(<?php echo $device['devices_id']; ?>)"
+                                          title="Editar dispositivo">
                                     <i class="fa fa-edit"></i> Editar
-                                  </a>
+                                  </button>
+                                  
+                                  <!-- Botones modo edición -->
+                                  <button type="button" 
+                                          class="btn btn-sm btn-success edit-mode" 
+                                          onclick="saveEdit(<?php echo $device['devices_id']; ?>)"
+                                          style="display: none;"
+                                          title="Guardar cambios">
+                                    <i class="fa fa-save"></i> Guardar
+                                  </button>
+                                  
+                                  <button type="button" 
+                                          class="btn btn-sm btn-secondary edit-mode" 
+                                          onclick="cancelEdit(<?php echo $device['devices_id']; ?>)"
+                                          style="display: none;"
+                                          title="Cancelar edición">
+                                    <i class="fa fa-times"></i> Cancelar
+                                  </button>
                                   
                                   <form method="POST" 
                                         style="display: inline;" 
@@ -242,6 +273,99 @@ include __DIR__ . '/../layout/header.php';
   </div>
 </div>
 
+
+
+  
+<!-- Estilos para edición inline y tabla más grande -->
+<style>
+/* Hacer la tabla más grande y visible */
+#devicesTable {
+    font-size: 16px;
+}
+
+#devicesTable th {
+    font-size: 18px;
+    font-weight: bold;
+    padding: 15px 12px;
+    text-align: center;
+}
+
+#devicesTable td {
+    padding: 15px 12px;
+    vertical-align: middle;
+    text-align: center;
+}
+
+/* Hacer los badges más grandes */
+#devicesTable .badge {
+    font-size: 14px;
+    padding: 8px 12px;
+    font-weight: 600;
+}
+
+/* Hacer los códigos más grandes */
+#devicesTable code {
+    font-size: 14px;
+    padding: 6px 10px;
+    font-weight: 600;
+}
+
+/* Hacer los números ID más grandes */
+#devicesTable td strong {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* Hacer las fechas más grandes */
+#devicesTable td strong,
+#devicesTable .text-muted {
+    font-size: 14px;
+}
+
+/* Botones más grandes */
+#devicesTable .btn {
+    font-size: 14px;
+    padding: 8px 12px;
+    font-weight: 600;
+}
+
+/* Inputs de edición más grandes */
+.edit-mode input {
+    min-width: 180px;
+    font-size: 16px;
+    padding: 10px 12px;
+    font-weight: 600;
+}
+
+#devicesTable .edit-mode {
+    margin: 2px 0;
+}
+
+.btn-group .edit-mode {
+    margin-left: 5px;
+}
+
+/* Highlighting para fila en edición */
+tr.editing {
+    background-color: #f8f9fa !important;
+    border: 2px solid #007bff;
+}
+
+/* Espaciado entre botones */
+.btn-group .btn {
+    margin-right: 5px;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+
+/* Hacer las filas más altas */
+#devicesTable tbody tr {
+    min-height: 60px;
+}
+</style>
+
 <script>
 $(document).ready(function() {
     // Animar las filas de la tabla al cargar
@@ -272,12 +396,125 @@ $(document).ready(function() {
             return false;
         }
     });
+    
+    // Ya no necesitamos event listeners aquí, usamos onclick directo
 });
 
 // Auto-hide alerts después de 5 segundos
 setTimeout(function() {
     $('.alert').fadeOut('slow');
 }, 5000);
+
+
+
+// Funciones para edición inline
+function enableEdit(deviceId) {
+    // Ocultar elementos de vista
+    var row = document.getElementById('row-' + deviceId);
+    var viewElements = row.querySelectorAll('.view-mode');
+    var editElements = row.querySelectorAll('.edit-mode');
+    
+    // Agregar clase de edición a la fila
+    row.classList.add('editing');
+    
+    viewElements.forEach(function(element) {
+        element.style.display = 'none';
+    });
+    
+    editElements.forEach(function(element) {
+        element.style.display = 'inline-block';
+    });
+    
+    // Enfocar el primer campo de edición
+    document.getElementById('alias-edit-' + deviceId).focus();
+}
+
+function cancelEdit(deviceId) {
+    // Mostrar elementos de vista y ocultar elementos de edición
+    var row = document.getElementById('row-' + deviceId);
+    var viewElements = row.querySelectorAll('.view-mode');
+    var editElements = row.querySelectorAll('.edit-mode');
+    
+    // Quitar clase de edición de la fila
+    row.classList.remove('editing');
+    
+    viewElements.forEach(function(element) {
+        element.style.display = 'inline-block';
+    });
+    
+    editElements.forEach(function(element) {
+        element.style.display = 'none';
+    });
+    
+    // Restaurar valores originales
+    var aliasView = document.getElementById('alias-view-' + deviceId).textContent.trim();
+    var serieView = document.getElementById('serie-view-' + deviceId).textContent.trim();
+    
+    document.getElementById('alias-edit-' + deviceId).value = aliasView;
+    document.getElementById('serie-edit-' + deviceId).value = serieView;
+}
+
+function saveEdit(deviceId) {
+    var alias = document.getElementById('alias-edit-' + deviceId).value.trim();
+    var serie = document.getElementById('serie-edit-' + deviceId).value.trim();
+    
+    // Validaciones básicas
+    if (alias.length < 3) {
+        alert('El alias debe tener al menos 3 caracteres');
+        document.getElementById('alias-edit-' + deviceId).focus();
+        return;
+    }
+    
+    if (serie.length < 3) {
+        alert('El número de serie debe tener al menos 3 caracteres');
+        document.getElementById('serie-edit-' + deviceId).focus();
+        return;
+    }
+    
+    // Deshabilitar botones durante la actualización
+    var saveBtn = document.querySelector('#row-' + deviceId + ' .btn-success');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Guardando...';
+    
+    // Enviar datos al servidor
+    fetch('/Device/update', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'device_id=' + encodeURIComponent(deviceId) + 
+              '&alias=' + encodeURIComponent(alias) + 
+              '&serie=' + encodeURIComponent(serie)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Actualizar los elementos de vista con los nuevos valores
+            document.getElementById('alias-view-' + deviceId).textContent = alias;
+            document.getElementById('serie-view-' + deviceId).textContent = serie;
+            
+            // Quitar clase de edición
+            document.getElementById('row-' + deviceId).classList.remove('editing');
+            
+            // Volver al modo vista
+            cancelEdit(deviceId);
+            
+            // Mostrar mensaje de éxito
+            alert('Dispositivo actualizado correctamente');
+        } else {
+            alert('Error: ' + (data.message || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        alert('Error al conectar con el servidor: ' + error.message);
+    })
+    .finally(() => {
+        // Restaurar botón
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fa fa-save"></i> Guardar';
+    });
+}
+
 </script>
 
 <?php include __DIR__ . '/../layout/footer.php'; ?> 

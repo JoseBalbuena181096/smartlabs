@@ -106,4 +106,90 @@ class DeviceController extends Controller {
         $this->deviceModel->delete($id);
         $this->redirect('Device');
     }
+    
+    public function update() {
+        // Establecer header JSON
+        header('Content-Type: application/json');
+        
+        // Verificar que sea una petición POST
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Método no permitido'
+            ]);
+            return;
+        }
+        
+        // Obtener datos del POST
+        $deviceId = isset($_POST['device_id']) ? (int)$_POST['device_id'] : 0;
+        $alias = isset($_POST['alias']) ? $this->sanitize($_POST['alias']) : '';
+        $serie = isset($_POST['serie']) ? $this->sanitize($_POST['serie']) : '';
+        
+        // Validaciones
+        if (empty($deviceId) || empty($alias) || empty($serie)) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Todos los campos son requeridos'
+            ]);
+            return;
+        }
+        
+        if (strlen($alias) < 3) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'El alias debe tener al menos 3 caracteres'
+            ]);
+            return;
+        }
+        
+        if (strlen($serie) < 3) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'El número de serie debe tener al menos 3 caracteres'
+            ]);
+            return;
+        }
+        
+        // Verificar que el dispositivo existe y pertenece al usuario
+        $device = $this->deviceModel->findById($deviceId);
+        if (!$device || $device['devices_user_id'] != $_SESSION['user_id']) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Dispositivo no encontrado o no tienes permisos para editarlo'
+            ]);
+            return;
+        }
+        
+        // Verificar que la serie no esté siendo usada por otro dispositivo
+        $existingDevice = $this->deviceModel->findBySerie($serie);
+        if ($existingDevice && $existingDevice['devices_id'] != $deviceId) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'El número de serie ya está siendo usado por otro dispositivo'
+            ]);
+            return;
+        }
+        
+        // Intentar actualizar el dispositivo
+        try {
+            $result = $this->deviceModel->update($deviceId, $alias, $serie);
+            
+            if ($result) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Dispositivo actualizado correctamente'
+                ]);
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error al actualizar el dispositivo'
+                ]);
+            }
+        } catch (Exception $e) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error interno del servidor: ' . $e->getMessage()
+            ]);
+        }
+    }
 } 
