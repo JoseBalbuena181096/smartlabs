@@ -18,9 +18,33 @@ class EquipmentController extends Controller {
         $rfid_ = "";
         $message = "";
         $equipments = [];
+        $devices = [];
+        $equipment_exists = false;
         
+        // Obtener dispositivos de la sesión como en register_equipment_lab.php
+        if (isset($_SESSION['devices'])) {
+            $devices = $_SESSION['devices'];
+        }
+        
+        // Manejar actualización de equipo existente
+        if ($_POST && isset($_POST['update_equipment']) && isset($_POST['rfid'])) {
+            $name_ = strip_tags($_POST['name']);
+            $name_ = strtoupper($name_);
+            $brand_ = strip_tags($_POST['brand']);
+            $brand_ = strtoupper($brand_);
+            $rfid_ = strip_tags($_POST['rfid']);
+            
+            // Actualizar equipo existente
+            $this->db->execute("UPDATE `equipments` SET `equipments_name` = ?, `equipments_brand` = ? WHERE `equipments_rfid` = ?", [$name_, $brand_, $rfid_]);
+            $message .= "¡Equipo actualizado exitosamente!";
+            
+            // Limpiar variables después de actualizar
+            $name_ = "";
+            $brand_ = "";
+            $rfid_ = "";
+        }
         // Manejar creación de equipo (como register_equipment_lab.php)
-        if ($_POST && isset($_POST['name']) && isset($_POST['brand']) && isset($_POST['rfid'])) {
+        else if ($_POST && isset($_POST['name']) && isset($_POST['brand']) && isset($_POST['rfid'])) {
             $name_ = strip_tags($_POST['name']);
             $name_ = strtoupper($name_);
             $brand_ = strip_tags($_POST['brand']);
@@ -34,23 +58,20 @@ class EquipmentController extends Controller {
             
             if ($count == 0) {
                 $this->db->execute("INSERT INTO `equipments` (`equipments_name`, `equipments_rfid`, `equipments_brand`) VALUES (?, ?, ?)", [$name_, $rfid_, $brand_]);
-                $message .= "equipo creado <br>";
+                $message .= "¡Equipo creado exitosamente!";
                 
                 // Limpiar variables después de crear
                 $name_ = "";
                 $brand_ = "";
                 $rfid_ = "";
             } else {
-                $message .= "equipo existente <br>";
+                // El equipo ya existe, mantener datos para actualización
+                $existing_equipment = $equipments_check[0];
+                $name_ = $existing_equipment['equipments_name'];
+                $brand_ = $existing_equipment['equipments_brand'];
+                $equipment_exists = true;
+                $message .= "⚠️ EQUIPO YA EXISTE - Puedes actualizar sus datos";
             }
-            
-            // Obtener equipos actualizados
-            $equipments = $this->db->query("SELECT * FROM `equipments` ORDER BY `equipments_id` DESC");
-        } else {
-            $message = "Complete el formulario";
-            
-            // Obtener todos los equipos
-            $equipments = $this->db->query("SELECT * FROM `equipments` ORDER BY `equipments_id` DESC");
         }
         
         // Manejar eliminación
@@ -60,12 +81,17 @@ class EquipmentController extends Controller {
             $this->redirect('Equipment');
         }
         
+        // Obtener equipos actualizados
+        $equipments = $this->db->query("SELECT * FROM `equipments` ORDER BY `equipments_id` DESC");
+        
         $this->view('equipment/index', [
             'equipments' => $equipments,
             'message' => $message,
             'name_' => $name_,
             'brand_' => $brand_,
-            'rfid_' => $rfid_
+            'rfid_' => $rfid_,
+            'devices' => $devices,
+            'equipment_exists' => $equipment_exists
         ]);
     }
     
