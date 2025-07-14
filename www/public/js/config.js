@@ -9,10 +9,10 @@ window.SmartLabsConfig = {
     
     // Configuración MQTT
     mqtt: {
-        brokerUrl: 'ws://192.168.0.100:8083/mqtt',
-        username: 'smartlabs',
-        password: 'smartlabs123',
-        clientId: 'smartlabs_web_' + Math.random().toString(16).substr(2, 8),
+        brokerUrl: 'wss://192.168.0.100:8074/mqtt',
+        username: 'jose',
+        password: 'public',
+        clientId: 'iotmc' + Math.random().toString(16).substr(2, 8),
         topics: {
             deviceStatus: 'smartlabs/devices/+/status',
             deviceRfid: 'smartlabs/devices/+/rfid',

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dashboard SMARTLABS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .btn-success { background-color: #28a745; color: white; }
+        .btn-danger { background-color: #dc3545; color: white; }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-online { background-color: #28a745; }
+        .status-offline { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>Test Dashboard SMARTLABS</h1>
+    
+    <div class="test-section">
+        <h3>Estado MQTT</h3>
+        <span id="mqtt_status" class="status-indicator status-offline"></span>
+        <small id="mqtt_status_text">MQTT: Desconectado</small>
+        <br><br>
+        <button onclick="testMQTT()">Probar Conexión MQTT</button>
+    </div>
+    
+    <div class="test-section">
+        <h3>Control de Dispositivos</h3>
+        <select id="device_id">
+            <option value="TEST001">Dispositivo Test 1</option>
+            <option value="TEST002">Dispositivo Test 2</option>
+        </select>
+        <br><br>
+        <button onclick="command('open')" class="btn btn-success">ENCENDER</button>
+        <button onclick="command('close')" class="btn btn-danger">APAGAR</button>
+    </div>
+    
+    <div class="test-section">
+        <h3>Temperatura</h3>
+        <h4>Temperatura: <span id="display_temp1">--</span>°C</h4>
+        <button onclick="testTemperature()">Simular Temperatura</button>
+    </div>
+    
+    <div class="test-section">
+        <h3>Notificaciones</h3>
+        <div id="display_new_access"></div>
+        <button onclick="testNotification()">Simular Acceso</button>
+    </div>
+    
+    <div class="test-section">
+        <h3>Log</h3>
+        <div id="log" style="height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; font-family: monospace;"></div>
+    </div>
+
+    <script>
+        // Variables globales
+        let mqttConnected = false;
+        let testMode = true;
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateMqttStatus(connected, message = null) {
+            const statusIndicator = document.getElementById('mqtt_status');
+            const statusText = document.getElementById('mqtt_status_text');
+            
+            if (statusIndicator && statusText) {
+                if (connected) {
+                    statusIndicator.className = 'status-indicator status-online';
+                    statusText.textContent = 'MQTT: Conectado';
+                } else {
+                    statusIndicator.className = 'status-indicator status-offline';
+                    statusText.textContent = message ? `MQTT: ${message}` : 'MQTT: Desconectado';
+                }
+            }
+            log(`Estado MQTT: ${connected ? 'Conectado' : (message || 'Desconectado')}`);
+        }
+        
+        function command(action) {
+            const deviceSerie = document.getElementById("device_id").value;
+            log(`Comando ${action} enviado a dispositivo ${deviceSerie}`);
+            
+            if (!deviceSerie) {
+                alert('Por favor seleccione un dispositivo');
+                return;
+            }
+            
+            if (!mqttConnected) {
+                alert('MQTT no está conectado. Modo de prueba activado.');
+                log('Simulando envío de comando en modo de prueba');
+                return;
+            }
+            
+            // Simular envío de comando
+            setTimeout(() => {
+                alert(`Comando ${action} enviado a ${deviceSerie}`);
+                log(`Comando ${action} confirmado para ${deviceSerie}`);
+            }, 500);
+        }
+        
+        function testMQTT() {
+            log('Iniciando prueba de conexión MQTT...');
+            updateMqttStatus(false, 'Conectando...');
+            
+            setTimeout(() => {
+                mqttConnected = true;
+                updateMqttStatus(true);
+                log('Conexión MQTT simulada exitosamente');
+            }, 2000);
+        }
+        
+        function testTemperature() {
+            const temp = Math.floor(Math.random() * 30) + 20; // 20-50°C
+            document.getElementById('display_temp1').textContent = temp;
+            log(`Temperatura actualizada: ${temp}°C`);
+        }
+        
+        function testNotification() {
+            const accessDiv = document.getElementById('display_new_access');
+            accessDiv.textContent = 'Nuevo acceso: Usuario Test';
+            accessDiv.style.fontWeight = 'bold';
+            accessDiv.style.color = '#28a745';
+            log('Notificación de acceso simulada');
+            
+            setTimeout(() => {
+                accessDiv.textContent = '';
+                log('Notificación de acceso limpiada');
+            }, 3000);
+        }
+        
+        // Inicializar log
+        log('Sistema de prueba iniciado');
+        log('Todas las funciones están listas para probar');
+    </script>
+</body>
+</html> 

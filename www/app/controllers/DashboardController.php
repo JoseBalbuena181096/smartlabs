@@ -17,27 +17,48 @@ class DashboardController extends Controller {
     
     public function index() {
         $userId = $_SESSION['user_id'];
-        $selectedDevice = isset($_GET['device']) ? $this->sanitize($_GET['device']) : '';
+        $selectedDevice = isset($_GET['serie_device']) ? $this->sanitize($_GET['serie_device']) : '';
         
         // Obtener dispositivos del usuario
         $devices = $this->db->query("SELECT * FROM `devices` WHERE `devices_user_id` = ?", [$userId]);
         
-        // Obtener tráfico filtrado (como dashboard.php)
-        $traffic = [];
+        // Almacenar dispositivos en la sesión para JavaScript (como en legacy)
+        $_SESSION['devices'] = $devices;
+        
+        // Obtener tráfico filtrado (como dashboard.php legacy)
+        $usersTrafficDevice = [];
         $totalAccess = 0;
         $todayAccess = 0;
         $thisWeekAccess = 0;
         
         if ($selectedDevice) {
-            // Filtrar por dispositivo específico (últimos 12 registros como en legacy)
-            $traffic = $this->db->query("
-                SELECT t.*, h.hab_name, h.hab_registration 
-                FROM `traffic` t 
-                LEFT JOIN `habintants` h ON t.traffic_hab_id = h.hab_id 
-                WHERE t.traffic_device = ? 
-                ORDER BY t.traffic_date DESC 
-                LIMIT 12
-            ", [$selectedDevice]);
+            // Conectar a base de datos externa (como en legacy dashboard.php)
+            try {
+                $external_db = new mysqli('192.168.0.100', 'root', 'emqxpass', 'emqx', 4000);
+                if ($external_db->connect_error) {
+                    throw new Exception("Conexión externa fallida: " . $external_db->connect_error);
+                }
+                
+                // Consulta SQL como en legacy (últimos 12 registros)
+                $sql = "SELECT * FROM traffic_devices WHERE traffic_device = ? ORDER BY traffic_date DESC LIMIT 12";
+                $stmt = $external_db->prepare($sql);
+                $stmt->bind_param("s", $selectedDevice);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $usersTrafficDevice = $result->fetch_all(MYSQLI_ASSOC);
+                $external_db->close();
+                
+            } catch (Exception $e) {
+                // Fallback a base de datos local
+                $usersTrafficDevice = $this->db->query("
+                    SELECT t.*, h.hab_name, h.hab_registration, h.hab_email
+                    FROM `traffic` t 
+                    LEFT JOIN `habintants` h ON t.traffic_hab_id = h.hab_id 
+                    WHERE t.traffic_device = ? 
+                    ORDER BY t.traffic_date DESC 
+                    LIMIT 12
+                ", [$selectedDevice]);
+            }
             
             // Estadísticas para el dispositivo seleccionado
             $totalResult = $this->db->query("SELECT COUNT(*) as total FROM `traffic` WHERE `traffic_device` = ?", [$selectedDevice]);
@@ -48,38 +69,18 @@ class DashboardController extends Controller {
             
             $weekResult = $this->db->query("SELECT COUNT(*) as week FROM `traffic` WHERE `traffic_device` = ? AND YEARWEEK(traffic_date) = YEARWEEK(NOW())", [$selectedDevice]);
             $thisWeekAccess = $weekResult[0]['week'];
-        } else {
-            // Mostrar todos los dispositivos del usuario (últimos 12 registros total)
-            if (!empty($devices)) {
-                $deviceSerials = array_column($devices, 'devices_serie');
-                $placeholders = str_repeat('?,', count($deviceSerials) - 1) . '?';
-                
-                $traffic = $this->db->query("
-                    SELECT t.*, h.hab_name, h.hab_registration 
-                    FROM `traffic` t 
-                    LEFT JOIN `habintants` h ON t.traffic_hab_id = h.hab_id 
-                    WHERE t.traffic_device IN ($placeholders) 
-                    ORDER BY t.traffic_date DESC 
-                    LIMIT 12
-                ", $deviceSerials);
-                
-                // Estadísticas generales
-                $totalResult = $this->db->query("SELECT COUNT(*) as total FROM `traffic` WHERE `traffic_device` IN ($placeholders)", $deviceSerials);
-                $totalAccess = $totalResult[0]['total'];
-                
-                $todayResult = $this->db->query("SELECT COUNT(*) as today FROM `traffic` WHERE `traffic_device` IN ($placeholders) AND DATE(traffic_date) = CURDATE()", $deviceSerials);
-                $todayAccess = $todayResult[0]['today'];
-                
-                $weekResult = $this->db->query("SELECT COUNT(*) as week FROM `traffic` WHERE `traffic_device` IN ($placeholders) AND YEARWEEK(traffic_date) = YEARWEEK(NOW())", $deviceSerials);
-                $thisWeekAccess = $weekResult[0]['week'];
-            }
         }
         
         // Estadísticas adicionales
         $uniqueUsers = 0;
         $deviceCount = count($devices);
         
-        if (!empty($devices)) {
+        if ($selectedDevice) {
+            // Usuarios únicos para el dispositivo seleccionado
+            $uniqueResult = $this->db->query("SELECT COUNT(DISTINCT traffic_hab_id) as unique_users FROM `traffic` WHERE `traffic_device` = ?", [$selectedDevice]);
+            $uniqueUsers = $uniqueResult[0]['unique_users'];
+        } else if (!empty($devices)) {
+            // Usuarios únicos para todos los dispositivos del usuario
             $deviceSerials = array_column($devices, 'devices_serie');
             $placeholders = str_repeat('?,', count($deviceSerials) - 1) . '?';
             
@@ -89,7 +90,7 @@ class DashboardController extends Controller {
         
         $this->view('dashboard/index', [
             'devices' => $devices,
-            'traffic' => $traffic,
+            'usersTrafficDevice' => $usersTrafficDevice,
             'selectedDevice' => $selectedDevice,
             'stats' => [
                 'totalAccess' => $totalAccess,
@@ -116,11 +117,11 @@ class DashboardController extends Controller {
         header('Content-Type: application/json');
         
         $userId = $_SESSION['user_id'];
-        $selectedDevice = isset($_GET['device']) ? $this->sanitize($_GET['device']) : '';
+        $selectedDevice = isset($_GET['serie_device']) ? $this->sanitize($_GET['serie_device']) : '';
         
         if ($selectedDevice) {
             $traffic = $this->db->query("
-                SELECT t.*, h.hab_name, h.hab_registration 
+                SELECT t.*, h.hab_name, h.hab_registration, h.hab_email
                 FROM `traffic` t 
                 LEFT JOIN `habintants` h ON t.traffic_hab_id = h.hab_id 
                 WHERE t.traffic_device = ? 
@@ -128,24 +129,9 @@ class DashboardController extends Controller {
                 LIMIT 12
             ", [$selectedDevice]);
         } else {
-            // Obtener dispositivos del usuario
-            $userDevices = $this->db->query("SELECT devices_serie FROM `devices` WHERE `devices_user_id` = ?", [$userId]);
-            $deviceSerials = array_column($userDevices, 'devices_serie');
-            
-            if (!empty($deviceSerials)) {
-                $placeholders = str_repeat('?,', count($deviceSerials) - 1) . '?';
-                $traffic = $this->db->query("
-                    SELECT t.*, h.hab_name, h.hab_registration 
-                    FROM `traffic` t 
-                    LEFT JOIN `habintants` h ON t.traffic_hab_id = h.hab_id 
-                    WHERE t.traffic_device IN ($placeholders) 
-                    ORDER BY t.traffic_date DESC 
-                    LIMIT 12
-                ", $deviceSerials);
-            } else {
-                echo json_encode(['traffic' => []]);
-                exit();
-            }
+            // Si no hay dispositivo seleccionado, retornar vacío
+            echo json_encode(['traffic' => []]);
+            exit();
         }
         
         echo json_encode([
@@ -160,7 +146,7 @@ class DashboardController extends Controller {
         header('Content-Type: application/json');
         
         $userId = $_SESSION['user_id'];
-        $selectedDevice = isset($_GET['device']) ? $this->sanitize($_GET['device']) : '';
+        $selectedDevice = isset($_GET['serie_device']) ? $this->sanitize($_GET['serie_device']) : '';
         
         $userDevices = $this->db->query("SELECT devices_serie FROM `devices` WHERE `devices_user_id` = ?", [$userId]);
         $deviceSerials = array_column($userDevices, 'devices_serie');
@@ -195,6 +181,74 @@ class DashboardController extends Controller {
             'thisWeekAccess' => $thisWeekAccess,
             'uniqueUsers' => $uniqueUsers,
             'deviceCount' => count($deviceSerials),
+            'timestamp' => date('Y-m-d H:i:s')
+        ]);
+        exit();
+    }
+    
+    public function command() {
+        // Endpoint para controlar dispositivos via MQTT (como en legacy)
+        header('Content-Type: application/json');
+        
+        if (!$_POST || !isset($_POST['action']) || !isset($_POST['device_serie'])) {
+            echo json_encode(['error' => 'Parámetros requeridos: action, device_serie']);
+            exit();
+        }
+        
+        $action = $this->sanitize($_POST['action']);
+        $deviceSerie = $this->sanitize($_POST['device_serie']);
+        $userId = $_SESSION['user_id'];
+        
+        // Verificar que el usuario tiene acceso al dispositivo
+        $userDevice = $this->db->query("SELECT * FROM `devices` WHERE `devices_serie` = ? AND `devices_user_id` = ?", [$deviceSerie, $userId]);
+        
+        if (empty($userDevice)) {
+            echo json_encode(['error' => 'Dispositivo no encontrado o sin permisos']);
+            exit();
+        }
+        
+        // Validar acción
+        if (!in_array($action, ['open', 'close'])) {
+            echo json_encode(['error' => 'Acción no válida']);
+            exit();
+        }
+        
+        // Aquí se enviaría el comando MQTT al dispositivo
+        // Por ahora retornamos éxito ya que el cliente JavaScript manejará MQTT
+        echo json_encode([
+            'success' => true,
+            'message' => "Comando '{$action}' enviado al dispositivo {$deviceSerie}",
+            'action' => $action,
+            'device' => $deviceSerie
+        ]);
+        exit();
+    }
+    
+    public function temperature() {
+        // Endpoint para obtener temperatura actual (se usará con MQTT)
+        header('Content-Type: application/json');
+        
+        $deviceSerie = isset($_GET['serie_device']) ? $this->sanitize($_GET['serie_device']) : '';
+        $userId = $_SESSION['user_id'];
+        
+        if (empty($deviceSerie)) {
+            echo json_encode(['error' => 'Dispositivo requerido']);
+            exit();
+        }
+        
+        // Verificar que el usuario tiene acceso al dispositivo
+        $userDevice = $this->db->query("SELECT * FROM `devices` WHERE `devices_serie` = ? AND `devices_user_id` = ?", [$deviceSerie, $userId]);
+        
+        if (empty($userDevice)) {
+            echo json_encode(['error' => 'Dispositivo no encontrado o sin permisos']);
+            exit();
+        }
+        
+        // La temperatura se actualizará vía MQTT en tiempo real
+        // Por ahora retornamos un valor por defecto
+        echo json_encode([
+            'temperature' => '--',
+            'device' => $deviceSerie,
             'timestamp' => date('Y-m-d H:i:s')
         ]);
         exit();

@@ -22,9 +22,9 @@
     <script src="/html/scripts/ajax.js"></script>
 
     <!-- MQTT y AJAX para SMARTLABS -->
-    <script src="/js/config.js"></script>
-    <script src="/js/mqtt-client.js"></script>
-    <script src="/js/smartlabs-ajax.js"></script>
+    <script src="/public/js/config.js"></script>
+    <script src="/public/js/mqtt-client.js"></script>
+    <script src="/public/js/smartlabs-ajax.js"></script>
 
     <!-- Scripts personalizados -->
     <?php if (isset($customScripts)): ?>

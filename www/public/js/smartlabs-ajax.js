@@ -346,8 +346,10 @@ class SmartLabsAjax {
     }
 }
 
-// Inicializar automáticamente
-window.smartLabsAjax = new SmartLabsAjax();
+// Inicializar automáticamente - evitar duplicados
+if (!window.smartLabsAjax) {
+    window.smartLabsAjax = new SmartLabsAjax();
+}
 
 // Funciones globales para compatibilidad con código legacy
 window.consultarPrestamos = function(rfid) {

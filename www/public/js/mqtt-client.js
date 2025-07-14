@@ -4,22 +4,22 @@
  */
 
 class SmartLabsMQTT {
-    constructor(brokerUrl = 'ws://192.168.0.100:8083/mqtt', options = {}) {
+    constructor(brokerUrl = 'wss://192.168.0.100:8074/mqtt', options = {}) {
         this.brokerUrl = brokerUrl;
         this.client = null;
         this.isConnected = false;
         this.options = {
-            clientId: 'smartlabs_web_' + Math.random().toString(16).substr(2, 8),
-            username: 'smartlabs',
-            password: 'smartlabs123',
+            clientId: 'iotmc' + Math.random().toString(16).substr(2, 8),
+            username: 'jose',
+            password: 'public',
             keepalive: 60,
             protocolId: 'MQTT',
             protocolVersion: 4,
             clean: true,
             reconnectPeriod: 1000,
-            connectTimeout: 30 * 1000,
+            connectTimeout: 4000,
             will: {
-                topic: 'smartlabs/web/lwt',
+                topic: 'smartlabs/dashboard/lwt',
                 payload: 'offline',
                 qos: 0,
                 retain: false
@@ -285,29 +285,28 @@ class SmartLabsMQTT {
 // Instancia global para uso en las páginas
 window.SmartLabsMQTT = SmartLabsMQTT;
 
-// Auto-inicializar si se detecta la página de préstamos
+// Auto-inicializar solo para página de préstamos (evitar conflictos con dashboard)
 document.addEventListener('DOMContentLoaded', function() {
-    if (window.location.pathname.includes('/Loan') || 
-        window.location.pathname.includes('/Dashboard')) {
+    if (window.location.pathname.includes('/Loan') && !window.location.pathname.includes('/Dashboard')) {
         
-        window.mqttClient = new SmartLabsMQTT();
+        if (!window.mqttClient) {
+            window.mqttClient = new SmartLabsMQTT();
+        }
         
         // Configurar callback para lecturas RFID en préstamos
-        if (window.location.pathname.includes('/Loan')) {
-            window.mqttClient.onRfidRead((deviceId, rfid) => {
-                const rfidInput = document.getElementById('consult_loan');
-                if (rfidInput) {
-                    rfidInput.value = rfid;
-                    rfidInput.focus();
-                    
-                    // Auto-submit el formulario como en dash_loan.php
-                    const form = rfidInput.closest('form');
-                    if (form) {
-                        form.dispatchEvent(new Event('submit', { bubbles: true }));
-                    }
+        window.mqttClient.onRfidRead((deviceId, rfid) => {
+            const rfidInput = document.getElementById('consult_loan');
+            if (rfidInput) {
+                rfidInput.value = rfid;
+                rfidInput.focus();
+                
+                // Auto-submit el formulario como en dash_loan.php
+                const form = rfidInput.closest('form');
+                if (form) {
+                    form.dispatchEvent(new Event('submit', { bubbles: true }));
                 }
-            });
-        }
+            }
+        });
         
         // Mostrar estado de conexión
         window.mqttClient.onConnect(() => {
