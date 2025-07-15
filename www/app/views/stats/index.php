@@ -37,45 +37,7 @@ include __DIR__ . '/../layout/header.php';
             </div>
             <div class="box-body">
               
-              <!-- Consulta de usuario por matrícula -->
-              <div class="card mb-4">
-                <div class="card-header bg-info text-white">
-                  <h4 class="mb-0"><i class="fa fa-user-circle"></i> Consultar Usuario por Matrícula</h4>
-                </div>
-                <div class="card-body">
-                  <form id="userForm" method="POST" class="row g-3">
-                    <div class="col-md-8">
-                      <label for="registration" class="form-label"><strong><i class="fa fa-id-card"></i> Matrícula del Usuario:</strong></label>
-                      <input type="text" 
-                             name="registration" 
-                             id="registration"
-                             class="form-control form-control-lg" 
-                             placeholder="Ej: L03533767" 
-                             value="<?php echo isset($registration_) ? htmlspecialchars($registration_) : ''; ?>"
-                             style="text-transform: uppercase;">
-                      <small class="text-muted">Ingresa la matrícula para verificar datos del usuario</small>
-                    </div>
-                    <div class="col-md-4 d-flex align-items-end">
-                      <button type="submit" class="btn btn-info btn-lg w-100">
-                        <i class="fa fa-search"></i> Consultar Usuario
-                      </button>
-                    </div>
-                  </form>
-                  
-                  <!-- Resultado de consulta de usuario -->
-                  <div id="userResult" class="mt-3">
-                    <?php if (isset($userInfo) && !empty($userInfo)): ?>
-                      <div class="alert alert-success">
-                        <strong><i class="fa fa-user"></i> Usuario encontrado:</strong> <?php echo $userInfo; ?>
-                      </div>
-                    <?php elseif (isset($_POST['registration'])): ?>
-                      <div class="alert alert-warning">
-                        <strong><i class="fa fa-exclamation-triangle"></i> Usuario no encontrado.</strong>
-                      </div>
-                    <?php endif; ?>
-                  </div>
-                </div>
-              </div>
+              
               
               <!-- Filtros para estadísticas -->
               <div class="card mb-4">
@@ -511,31 +473,7 @@ $(document).ready(function() {
         this.value = this.value.toUpperCase();
     });
     
-    // Consulta AJAX para verificar usuario
-    $('#userForm').submit(function(e) {
-        e.preventDefault();
-        
-        var registration = $('#registration').val().trim();
-        
-        if (registration === '') {
-            alert('Por favor ingresa una matrícula');
-            return false;
-        }
-        
-        $.ajax({
-            url: '/Stats/index',
-            type: 'POST',
-            data: {
-                registration: registration
-            },
-            success: function(response) {
-                $('#userResult').html('<div class="alert alert-success"><strong>Resultado:</strong> ' + response + '</div>');
-            },
-            error: function() {
-                $('#userResult').html('<div class="alert alert-danger"><strong>Error:</strong> No se pudo consultar el usuario.</div>');
-            }
-        });
-    });
+    
     
     // Animar tabla de resultados
     $('#statsTable tbody tr').each(function(index) {

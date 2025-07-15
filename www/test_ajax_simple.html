@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba AJAX Simple - SmartLabs</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Prueba AJAX Simple - Búsqueda de Usuarios</h1>
+    
+    <div>
+        <label for="searchInput">Buscar usuario:</label>
+        <input type="text" id="searchInput" placeholder="Escribir para buscar..." />
+        <button id="searchBtn">Buscar</button>
+    </div>
+    
+    <div id="results" style="border: 1px solid #ccc; padding: 10px; margin-top: 10px; min-height: 100px;">
+        <p>Escriba algo para buscar usuarios...</p>
+    </div>
+    
+    <div id="debug" style="background: #f0f0f0; padding: 10px; margin-top: 10px;">
+        <h3>Debug Info:</h3>
+        <div id="debugInfo"></div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            console.log('=== PÁGINA CARGADA ===');
+            console.log('jQuery version:', $.fn.jquery);
+            console.log('URL actual:', window.location.href);
+            
+            // Función para mostrar debug info
+            function showDebug(message) {
+                var timestamp = new Date().toLocaleTimeString();
+                $('#debugInfo').append('<div>[' + timestamp + '] ' + message + '</div>');
+                console.log(message);
+            }
+            
+            // Función de búsqueda
+            function buscarUsuarios(query) {
+                showDebug('Iniciando búsqueda con query: ' + query);
+                
+                // Mostrar loading
+                $('#results').html('<div style="text-align: center;"><i>🔄 Buscando...</i></div>');
+                
+                // Configurar AJAX
+                $.ajax({
+                    url: '/stats/',
+                    method: 'POST',
+                    data: {
+                        search_user: query
+                    },
+                    timeout: 10000,
+                    beforeSend: function() {
+                        showDebug('Enviando petición AJAX a /stats/');
+                    },
+                    success: function(response, status, xhr) {
+                        showDebug('✅ Respuesta recibida exitosamente');
+                        showDebug('Status: ' + status);
+                        showDebug('Content-Type: ' + xhr.getResponseHeader('Content-Type'));
+                        showDebug('Response: ' + JSON.stringify(response));
+                        
+                        try {
+                            // Procesar respuesta
+                            var users = Array.isArray(response) ? response : JSON.parse(response);
+                            showDebug('Usuarios procesados: ' + users.length);
+                            
+                            // Mostrar resultados
+                            if (users.length > 0) {
+                                var html = '<h3>Usuarios encontrados (' + users.length + '):</h3><ul>';
+                                users.forEach(function(user) {
+                                    html += '<li><strong>' + user.hab_name + '</strong> (' + user.hab_registration + ') - ' + user.hab_email + ' - <em>' + user.match_type + '</em></li>';
+                                });
+                                html += '</ul>';
+                                $('#results').html(html);
+                            } else {
+                                $('#results').html('<p>No se encontraron usuarios</p>');
+                            }
+                            
+                        } catch (e) {
+                            showDebug('❌ Error procesando respuesta: ' + e.message);
+                            $('#results').html('<p style="color: red;">Error procesando respuesta: ' + e.message + '</p>');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        showDebug('❌ Error AJAX: ' + status);
+                        showDebug('Error: ' + error);
+                        showDebug('Status Code: ' + xhr.status);
+                        showDebug('Response Text: ' + xhr.responseText);
+                        
+                        var errorMsg = 'Error desconocido';
+                        if (status === 'timeout') {
+                            errorMsg = 'Tiempo de espera agotado';
+                        } else if (xhr.status === 404) {
+                            errorMsg = 'Ruta no encontrada (404)';
+                        } else if (xhr.status === 500) {
+                            errorMsg = 'Error interno del servidor (500)';
+                        } else if (xhr.status === 0) {
+                            errorMsg = 'Error de red o CORS';
+                        }
+                        
+                        $('#results').html('<p style="color: red;">❌ ' + errorMsg + '</p>');
+                    },
+                    complete: function() {
+                        showDebug('Petición AJAX completada');
+                    }
+                });
+            }
+            
+            // Event listeners
+            $('#searchInput').on('input', function() {
+                var query = $(this).val().trim();
+                if (query.length >= 1) {
+                    buscarUsuarios(query);
+                } else {
+                    $('#results').html('<p>Escriba algo para buscar usuarios...</p>');
+                }
+            });
+            
+            $('#searchBtn').click(function() {
+                var query = $('#searchInput').val().trim();
+                if (query.length >= 1) {
+                    buscarUsuarios(query);
+                } else {
+                    $('#results').html('<p>Escriba algo para buscar usuarios...</p>');
+                }
+            });
+            
+            // Prueba automática
+            setTimeout(function() {
+                showDebug('Ejecutando prueba automática con "jose"');
+                $('#searchInput').val('jose');
+                buscarUsuarios('jose');
+            }, 2000);
+            
+            showDebug('Event listeners configurados');
+        });
+    </script>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        #searchInput {
+            width: 300px;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #searchBtn {
+            padding: 8px 16px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #searchBtn:hover {
+            background-color: #0056b3;
+        }
+        #results {
+            background-color: white;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #debug {
+            background-color: #e9ecef;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #debugInfo div {
+            font-size: 12px;
+            color: #666;
+            margin: 2px 0;
+        }
+    </style>
+</body>
+</html> 
