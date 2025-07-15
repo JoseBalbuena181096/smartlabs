@@ -1,0 +1,13 @@
+# Archivos y directorios a ignorar
+assets/
+vendor/
+views/
+node/node_modules/
+
+# Archivos de sistema
+.DS_Store
+.ftpconfig
+
+# Archivos de configuración IDE
+.vscode/
+.idea/ 

@@ -104,6 +104,62 @@ include __DIR__ . '/../layout/header.php';
   50% { opacity: 0.5; }
   100% { opacity: 1; }
 }
+
+/* Estilos para el indicador de estado del dispositivo */
+.device-status-panel {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 8px;
+}
+
+.device-status-indicator {
+  margin-left: 10px;
+  display: inline-block;
+}
+
+.device-status-indicator.status-on {
+  color: #28a745 !important;
+  animation: pulse 2s infinite;
+}
+
+.device-status-indicator.status-off {
+  color: #dc3545 !important;
+}
+
+.device-status-indicator.status-unknown {
+  color: #ffc107 !important;
+}
+
+.device-status-indicator i {
+  font-size: 14px;
+}
+
+#device-status-icon.status-on {
+  background-color: #28a745 !important;
+}
+
+#device-status-icon.status-off {
+  background-color: #dc3545 !important;
+}
+
+#device-status-icon.status-unknown {
+  background-color: #ffc107 !important;
+}
+
+#device-last-activity {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.device-status-panel .w-48 {
+  transition: all 0.3s ease;
+}
+
+.device-status-panel:hover .w-48 {
+  transform: scale(1.1);
+}
 </style>
 
 <?php include __DIR__ . '/../layout/sidebar.php'; ?>
@@ -164,13 +220,15 @@ include __DIR__ . '/../layout/header.php';
                   <select id="device_id" class="form-control">
                     <?php if (!empty($devices)): ?>
                       <?php foreach ($devices as $device): ?>
-                        <option value="<?php echo htmlspecialchars($device['devices_serie']); ?>">
+                        <option value="<?php echo htmlspecialchars($device['devices_serie']); ?>" 
+                                <?php echo ($selectedDevice === $device['devices_serie']) ? 'selected' : ''; ?>>
                           <?php echo htmlspecialchars($device['devices_alias']); ?>
                         </option>
                       <?php endforeach; ?>
                     <?php endif; ?>
                   </select>
                 </div>
+
               </div>
             </div>
             
@@ -201,6 +259,38 @@ include __DIR__ . '/../layout/header.php';
                 <span class="text-sm"> °C</span>
               </h4>
               <small class="text-muted">TEMPERATURA ESP32</small>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Panel de Estado del Dispositivo -->
+      <div class="row">
+        <div class="col-xs-12">
+          <div class="box p-a device-status-panel">
+            <div class="pull-left m-r">
+              <span class="w-48 rounded" id="device-status-icon">
+                <i class="fa fa-microchip"></i>
+              </span>
+            </div>
+            <div class="clear">
+              <h4 class="m-0 text-lg _300">
+                <span id="device-status-text">Sin seleccionar</span>
+                <span class="device-status-indicator" id="device-status-indicator">
+                  <i class="fa fa-circle text-muted"></i>
+                </span>
+              </h4>
+              <small class="text-muted">
+                ESTADO DEL DISPOSITIVO
+                <span id="device-last-activity" class="text-xs"></span>
+              </small>
+              <div id="device-user-info" class="mt-1" style="display: block;">
+                <small class="text-light">
+                  <i class="fa fa-user"></i> <span id="device-user-name">Sin usuario</span><br>
+                  <i class="fa fa-id-card"></i> <span id="device-user-registration">---</span><br>
+                  <i class="fa fa-envelope"></i> <span id="device-user-email">---</span>
+                </small>
+              </div>
             </div>
           </div>
         </div>
@@ -323,7 +413,10 @@ include __DIR__ . '/../layout/header.php';
 <!-- Scripts MQTT y funcionalidades -->
 <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
 <script src="<?php echo '/public/js/navigation.js'; ?>"></script>
+<script src="<?php echo '/public/js/device-status-config.js'; ?>"></script>
 <script src="<?php echo '/public/js/dashboard-legacy.js'; ?>"></script>
+<script src="<?php echo '/public/js/device-status-monitor.js'; ?>"></script>
+<script src="<?php echo '/public/js/device-status-websocket.js'; ?>"></script>
 <script>
 // Test inmediato después de cargar dashboard-legacy.js
 console.log('🔧 Verificando funciones inmediatamente después de cargar dashboard-legacy.js');
@@ -336,7 +429,7 @@ function testCommand() {
   if (typeof window.command === 'function') {
     console.log('✅ window.command está disponible');
     return true;
-  } else {
+    } else {
     console.error('❌ window.command NO está disponible');
     return false;
   }
@@ -345,6 +438,119 @@ function testCommand() {
 // Ejecutar test
 window.testCommand = testCommand;
 testCommand();
+
+// Función para probar el sistema de estado
+function testStateUpdate() {
+  const deviceId = document.getElementById('device_id').value;
+  if (!deviceId) {
+    alert('Por favor seleccione un dispositivo');
+    return;
+  }
+  
+  console.log('🧪 Probando actualización de estado para:', deviceId);
+  
+  // Simular estado alternativo
+  const currentState = window.deviceStatusWS.lastStatus[deviceId]?.state || 'off';
+  const newState = currentState === 'on' ? 'off' : 'on';
+  
+  console.log('🔄 Estado actual:', currentState, '-> Nuevo estado:', newState);
+  
+  // Actualizar estado en la base de datos
+  updateDeviceStateInDatabase(deviceId, newState);
+  
+  // Mostrar notificación
+  showNotification(`Estado de prueba: ${newState.toUpperCase()}`, 'info');
+}
+
+// Hacer función disponible globalmente
+window.testStateUpdate = testStateUpdate;
+
+// Función para probar la UI directamente
+function testUIUpdate() {
+  console.log('🧪 Probando actualización directa de UI');
+  
+  // Probar estado ON con usuario
+  const testDataOn = {
+    device: 'SMART10000',
+    state: 'on',
+    online: true,
+    user: 'Jose Angel Balbuena Palma',
+    user_name: 'Jose Angel Balbuena Palma',
+    user_registration: '123456789',
+    user_email: 'jose.balbuena@example.com',
+    last_activity: new Date().toISOString(),
+    timestamp: new Date().toISOString()
+  };
+  
+  console.log('🧪 Probando estado ON con datos:', testDataOn);
+  updateDeviceStatusUI(testDataOn);
+  
+  // Después de 3 segundos, probar estado OFF
+  setTimeout(() => {
+    const testDataOff = {
+      device: 'SMART10000',
+      state: 'off',
+      online: false,
+      user: 'Jose Angel Balbuena Palma',
+      user_name: 'Jose Angel Balbuena Palma',
+      user_registration: '123456789',
+      user_email: 'jose.balbuena@example.com',
+      last_activity: new Date().toISOString(),
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('🧪 Probando estado OFF con datos:', testDataOff);
+    updateDeviceStatusUI(testDataOff);
+  }, 3000);
+  
+  showNotification('Probando actualización directa de UI - Revisa la consola', 'info');
+}
+
+// Hacer función disponible globalmente
+window.testUIUpdate = testUIUpdate;
+
+// Función para forzar actualización con datos de WebSocket
+function forceUpdateFromWebSocket() {
+  console.log('🔧 Forzando actualización desde WebSocket...');
+  
+  // Obtener el dispositivo seleccionado
+  const deviceSelect = document.getElementById('device_id');
+  const selectedDevice = deviceSelect ? deviceSelect.value : 'SMART10000';
+  
+  // Obtener último estado conocido
+  const lastStatus = window.deviceStatusWS?.lastStatus?.[selectedDevice];
+  
+  if (lastStatus) {
+    console.log('🔧 Último estado conocido:', lastStatus);
+    
+    // Formatear datos para la UI
+    const formattedData = {
+      device: selectedDevice,
+      state: lastStatus.state || 'unknown',
+      online: lastStatus.state === 'on',
+      user: lastStatus.user || lastStatus.user_name || lastStatus.hab_name,
+      user_name: lastStatus.user_name || lastStatus.user || lastStatus.hab_name,
+      user_registration: lastStatus.user_registration || lastStatus.hab_registration,
+      user_email: lastStatus.user_email || lastStatus.hab_email,
+      last_activity: lastStatus.last_activity || lastStatus.timestamp
+    };
+    
+    console.log('🔧 Datos formateados para forzar actualización:', formattedData);
+    
+    // Forzar actualización
+    if (typeof updateDeviceStatusUI === 'function') {
+      updateDeviceStatusUI(formattedData);
+      console.log('✅ Actualización forzada completada');
+    } else {
+      console.error('❌ updateDeviceStatusUI no está disponible');
+    }
+  } else {
+    console.warn('⚠ No hay datos de estado disponibles para forzar actualización');
+  }
+}
+
+// Hacer función disponible globalmente
+window.forceUpdateFromWebSocket = forceUpdateFromWebSocket;
 
 // Backup global de command para asegurar que esté disponible
 setTimeout(() => {
@@ -373,6 +579,8 @@ setTimeout(() => {
 <script>
 // Pasar datos de dispositivos a JavaScript
 window.userDevices = <?php echo json_encode($devices); ?>;
+window.selectedDevice = <?php echo json_encode($selectedDevice); ?>;
+window.deviceInitialStatus = <?php echo json_encode($deviceInitialStatus); ?>;
 
 // Evitar conflictos de declaraciones - usar window namespace
 window.client = null;
@@ -399,6 +607,38 @@ try {
 // Inicializar compatibilidad con versiones anteriores
 document.addEventListener('DOMContentLoaded', function() {
   console.log('Dashboard MVC inicializado con funcionalidades legacy');
+  
+  // Mostrar estado inicial del dispositivo si está disponible
+  if (window.deviceInitialStatus) {
+    console.log('✓ Estado inicial del dispositivo:', window.deviceInitialStatus);
+    updateDeviceStatusUI(window.deviceInitialStatus);
+  } else {
+    console.log('⚠ No hay estado inicial del dispositivo disponible');
+    
+    // Simular datos iniciales para prueba
+    const testData = {
+      device: 'SMART10000',
+      state: 'on',
+      online: true,
+      user: 'Jose Angel Balbuena Palma',
+      user_name: 'Jose Angel Balbuena Palma',
+      user_registration: '123456',
+      user_email: 'test@example.com',
+      last_activity: new Date().toISOString()
+    };
+    
+    console.log('🧪 Probando updateDeviceStatusUI con datos de prueba:', testData);
+    
+    // Esperar un poco para que los elementos DOM estén disponibles
+    setTimeout(() => {
+      if (typeof updateDeviceStatusUI === 'function') {
+        updateDeviceStatusUI(testData);
+        console.log('✅ Función de prueba ejecutada');
+      } else {
+        console.error('❌ updateDeviceStatusUI no está disponible');
+      }
+    }, 1000);
+  }
   
   // Verificar que las funciones globales estén disponibles
   if (typeof command === 'function') {
@@ -433,6 +673,8 @@ document.addEventListener('DOMContentLoaded', function() {
     'updateMqttStatus',
     'syncSerieInput',
     'updateDashboardStats',
+    'updateDeviceStatus',
+    'updateDeviceStatusUI',
     'showNotification',
     'generarCadenaAleatoria',
     'initAudio',
@@ -446,6 +688,38 @@ document.addEventListener('DOMContentLoaded', function() {
       console.error(`✗ window.${funcName}() NO disponible`);
     }
   });
+  
+  // Configurar evento de cambio de dispositivo
+  const deviceSelect = document.getElementById('device_id');
+  if (deviceSelect) {
+    deviceSelect.addEventListener('change', function() {
+      const selectedDevice = this.value;
+      console.log('Dispositivo seleccionado cambiado a:', selectedDevice);
+      
+      // Actualizar variable global
+      window.selectedDevice = selectedDevice;
+      
+      // Solicitar estado actual del nuevo dispositivo
+      if (typeof requestDeviceStatus === 'function') {
+        requestDeviceStatus(selectedDevice);
+      }
+      
+      // Actualizar suscripción WebSocket si está disponible
+      if (typeof subscribeToDevices === 'function') {
+        subscribeToDevices([selectedDevice]);
+      }
+      
+      // Actualizar suscripción MQTT si está disponible
+      if (typeof subscribeToDeviceStatusTopics === 'function') {
+        subscribeToDeviceStatusTopics(selectedDevice);
+      }
+      
+      // Actualizar monitor de estado
+      if (window.deviceStatusMonitor) {
+        window.deviceStatusMonitor.selectedDevice = selectedDevice;
+      }
+    });
+  }
   
   // Animaciones para la tabla si está disponible
   const trafficTable = document.getElementById('trafficTable');
@@ -516,7 +790,100 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Función command de emergencia creada');
   }
   
+  // Inicializar sistema de monitoreo de estado
+  console.log('🔧 Inicializando sistema de monitoreo de estado...');
+  
+  // Configurar WebSocket si está disponible
+  if (typeof initDeviceStatusWS === 'function') {
+    console.log('✓ Inicializando WebSocket...');
+    
+    // Configurar callbacks para WebSocket
+    if (typeof onDeviceStatusEvent === 'function') {
+      // Callback para actualizaciones de estado
+      onDeviceStatusEvent('onStatusUpdate', function(deviceId, status) {
+        console.log('📡 Estado actualizado vía WebSocket:', deviceId, status);
+        if (deviceId === window.selectedDevice) {
+          console.log('🔧 Actualizando UI para dispositivo seleccionado:', deviceId);
+          console.log('🔧 Datos completos del estado:', status);
+          
+          // Asegurar que el objeto tiene el formato correcto
+          const statusData = {
+            device: deviceId,
+            state: status.state,
+            online: status.state === 'on', // Si está encendido, está conectado
+            user: status.user || status.user_name || status.hab_name,
+            user_name: status.user_name || status.user || status.hab_name,
+            user_registration: status.user_registration || status.hab_registration,
+            user_email: status.user_email || status.hab_email,
+            last_activity: status.last_activity || status.timestamp
+          };
+          
+          console.log('🔧 Datos formateados para UI:', statusData);
+          updateDeviceStatusUI(statusData);
+        }
+      });
+      
+      // Callback para conexión
+      onDeviceStatusEvent('onConnect', function() {
+        console.log('📡 WebSocket conectado');
+        if (window.selectedDevice) {
+          subscribeToDevices([window.selectedDevice]);
+        }
+      });
+    }
+    
+    // Intentar inicializar WebSocket con URL forzada
+    try {
+      const wsUrl = 'ws://localhost:3000';
+      console.log('🔧 Conectando WebSocket a:', wsUrl);
+      initDeviceStatusWS(wsUrl);
+    } catch (e) {
+      console.error('❌ Error inicializando WebSocket:', e);
+    }
+  }
+  
+  // Configurar MQTT para monitoreo de estado si está disponible
+  if (typeof initDeviceStatusMQTT === 'function') {
+    console.log('✓ Inicializando MQTT para estado...');
+    
+    // Intentar inicializar MQTT con URL forzada
+    try {
+      const mqttUrl = 'ws://localhost:8083/mqtt';
+      console.log('🔧 Conectando MQTT a:', mqttUrl);
+      initDeviceStatusMQTT(mqttUrl);
+      
+      // Configurar suscripción automática al cambiar dispositivo
+      if (window.selectedDevice) {
+        setTimeout(() => {
+          if (window.deviceStatusMQTT.isConnected) {
+            subscribeToDeviceStatusTopics(window.selectedDevice);
+          }
+        }, 2000);
+      }
+    } catch (e) {
+      console.error('❌ Error inicializando MQTT:', e);
+    }
+  }
+  
+  // Configurar monitor de estado (polling como fallback)
+  if (typeof initDeviceStatusMonitor === 'function') {
+    console.log('✓ Inicializando monitor de estado...');
+    const pollingInterval = window.DeviceStatusConfig.monitor.pollingInterval;
+    initDeviceStatusMonitor(pollingInterval);
+  }
+  
   console.log('✅ Dashboard MVC completamente inicializado');
+  
+  // Instrucciones para el usuario
+  console.log('');
+  console.log('🔧 FUNCIONES DE PRUEBA DISPONIBLES:');
+  console.log('   - testUIUpdate()           - Prueba la actualización de UI');
+  console.log('   - forceUpdateFromWebSocket() - Fuerza actualización con datos de WebSocket');
+  console.log('   - testCommand()            - Prueba la función command');
+  console.log('');
+  console.log('💡 Para probar manualmente, ejecuta en la consola:');
+  console.log('   testUIUpdate()');
+  console.log('');
 });
 
 // Fallback para jQuery si está disponible

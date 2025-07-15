@@ -36,6 +36,49 @@ function generarCadenaAleatoria(longitud) {
 // Hacer funciones disponibles globalmente
 window.generarCadenaAleatoria = generarCadenaAleatoria;
 
+// Función para actualizar estado del dispositivo en la base de datos
+function updateDeviceStateInDatabase(deviceSerie, state) {
+    console.log('Actualizando estado en base de datos:', deviceSerie, '->', state);
+    
+    // Crear FormData para enviar vía POST
+    const formData = new FormData();
+    formData.append('device_serie', deviceSerie);
+    formData.append('state', state);
+    
+    // Enviar petición AJAX
+    fetch('/Dashboard/updateDeviceState', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('✅ Estado actualizado en base de datos:', data.message);
+            
+            // Actualizar UI inmediatamente
+            updateDeviceStatusUI({
+                device: deviceSerie,
+                state: state,
+                online: true,
+                timestamp: data.timestamp
+            });
+            
+            // Mostrar notificación
+            showNotification('Estado actualizado: ' + state.toUpperCase(), 'success');
+        } else {
+            console.error('❌ Error actualizando estado:', data.error);
+            showNotification('Error actualizando estado: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error en petición AJAX:', error);
+        showNotification('Error de conexión al actualizar estado', 'error');
+    });
+}
+
+// Hacer función disponible globalmente
+window.updateDeviceStateInDatabase = updateDeviceStateInDatabase;
+
 // Función para controlar dispositivos (del legacy)
 function command(action) {
     const deviceSerie = document.getElementById("device_id").value;
@@ -59,6 +102,10 @@ function command(action) {
                 alert('Error enviando comando: ' + error);
             } else {
                 showNotification('Comando de encendido enviado al dispositivo ' + deviceSerie, 'success');
+                // Actualizar estado inmediatamente en la base de datos
+                updateDeviceStateInDatabase(deviceSerie, 'on');
+                // También actualizar después de 2 segundos por si acaso
+                setTimeout(updateDeviceStatus, 2000);
             }
         });
     } else if (action === "close") {
@@ -68,6 +115,10 @@ function command(action) {
                 alert('Error enviando comando: ' + error);
             } else {
                 showNotification('Comando de apagado enviado al dispositivo ' + deviceSerie, 'success');
+                // Actualizar estado inmediatamente en la base de datos
+                updateDeviceStateInDatabase(deviceSerie, 'off');
+                // También actualizar después de 2 segundos por si acaso
+                setTimeout(updateDeviceStatus, 2000);
             }
         });
     }
@@ -108,6 +159,41 @@ function process_msg(topic, message) {
         if (tempElement) {
             tempElement.textContent = msg;
             console.log('Temperatura actualizada de:', serialNumber, '=', msg);
+        }
+    }
+    
+    // Procesar mensajes de estado del dispositivo
+    if (query === "status" && deviceSerie === serialNumber) {
+        console.log('Estado del dispositivo actualizado:', serialNumber, '=', msg);
+        
+        // Actualizar UI con el nuevo estado
+        updateDeviceStatusUI({
+            device: serialNumber,
+            state: msg.toLowerCase() === 'on' ? 'on' : 'off',
+            online: true,
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    // Procesar confirmaciones de comandos
+    if (query === "command" && deviceSerie === serialNumber) {
+        console.log('Confirmación de comando recibida:', serialNumber, '=', msg);
+        
+        // Actualizar estado basado en el comando confirmado
+        let newState = 'unknown';
+        if (msg.toLowerCase() === 'open') {
+            newState = 'on';
+        } else if (msg.toLowerCase() === 'close') {
+            newState = 'off';
+        }
+        
+        if (newState !== 'unknown') {
+            updateDeviceStatusUI({
+                device: serialNumber,
+                state: newState,
+                online: true,
+                timestamp: new Date().toISOString()
+            });
         }
     }
 
@@ -319,13 +405,235 @@ function updateDashboardStats() {
         .catch(error => console.error('Error actualizando estadísticas:', error));
 }
 
+// Función para consultar el estado del dispositivo
+function updateDeviceStatus() {
+    const selectedDevice = document.getElementById("device_id")?.value;
+    
+    if (!selectedDevice) {
+        // Resetear indicadores si no hay dispositivo seleccionado
+        updateDeviceStatusUI({
+            device: null,
+            alias: 'Sin seleccionar',
+            state: 'unknown',
+            online: false,
+            last_activity: null
+        });
+        return;
+    }
+    
+    fetch('/Dashboard/status?serie_device=' + selectedDevice)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error obteniendo estado:', data.error);
+                updateDeviceStatusUI({
+                    device: selectedDevice,
+                    alias: 'Error',
+                    state: 'unknown',
+                    online: false,
+                    last_activity: null
+                });
+            } else {
+                console.log('Estado del dispositivo:', data);
+                updateDeviceStatusUI(data);
+            }
+        })
+        .catch(error => {
+            console.error('Error consultando estado del dispositivo:', error);
+            updateDeviceStatusUI({
+                device: selectedDevice,
+                alias: 'Error de conexión',
+                state: 'unknown',
+                online: false,
+                last_activity: null
+            });
+        });
+}
+
+// Función para actualizar la interfaz de usuario del estado del dispositivo
+function updateDeviceStatusUI(data) {
+    console.log('🔧 updateDeviceStatusUI llamado con:', data);
+    
+    const statusText = document.getElementById('device-status-text');
+    const statusIndicator = document.getElementById('device-status-indicator');
+    const statusIcon = document.getElementById('device-status-icon');
+    const lastActivity = document.getElementById('device-last-activity');
+    
+    console.log('🔧 Elementos DOM encontrados:', {
+        statusText: !!statusText,
+        statusIndicator: !!statusIndicator,
+        statusIcon: !!statusIcon
+    });
+    
+    // Verificar si tenemos los elementos necesarios
+    if (!statusText || !statusIndicator || !statusIcon) {
+        console.error('❌ No se encontraron elementos DOM necesarios para actualizar el estado');
+        return;
+    }
+    
+    if (statusText && statusIndicator && statusIcon) {
+        // Actualizar texto del estado
+        if (data.device) {
+            // Obtener nombre del usuario si está disponible
+            const userName = data.user || data.user_name || data.hab_name || null;
+            
+            switch (data.state) {
+                case 'on':
+                    const newTextOn = userName ? `Encendido - ${userName}` : 'Encendido';
+                    console.log('🟢 Actualizando estado a ENCENDIDO');
+                    console.log('🔧 Texto anterior:', statusText.textContent);
+                    console.log('🔧 Nuevo texto:', newTextOn);
+                    statusText.textContent = newTextOn;
+                    statusIndicator.className = 'device-status-indicator status-on';
+                    statusIcon.className = 'w-48 rounded status-on';
+                    statusIndicator.innerHTML = '<i class="fa fa-circle"></i>';
+                    console.log('🔧 Texto después de actualizar:', statusText.textContent);
+                    break;
+                case 'off':
+                    const newTextOff = userName ? `Apagado - ${userName}` : 'Apagado';
+                    console.log('🔴 Actualizando estado a APAGADO');
+                    console.log('🔧 Texto anterior:', statusText.textContent);
+                    console.log('🔧 Nuevo texto:', newTextOff);
+                    statusText.textContent = newTextOff;
+                    statusIndicator.className = 'device-status-indicator status-off';
+                    statusIcon.className = 'w-48 rounded status-off';
+                    statusIndicator.innerHTML = '<i class="fa fa-circle"></i>';
+                    console.log('🔧 Texto después de actualizar:', statusText.textContent);
+                    break;
+                default:
+                    const newTextUnknown = userName ? `Desconocido - ${userName}` : 'Desconocido';
+                    console.log('🟡 Actualizando estado a DESCONOCIDO:', data.state);
+                    console.log('🔧 Texto anterior:', statusText.textContent);
+                    console.log('🔧 Nuevo texto:', newTextUnknown);
+                    statusText.textContent = newTextUnknown;
+                    statusIndicator.className = 'device-status-indicator status-unknown';
+                    statusIcon.className = 'w-48 rounded status-unknown';
+                    statusIndicator.innerHTML = '<i class="fa fa-circle"></i>';
+                    console.log('🔧 Texto después de actualizar:', statusText.textContent);
+                    break;
+            }
+        } else {
+            statusText.textContent = data.alias || 'Sin seleccionar';
+            statusIndicator.className = 'device-status-indicator';
+            statusIcon.className = 'w-48 rounded';
+            statusIndicator.innerHTML = '<i class="fa fa-circle text-muted"></i>';
+        }
+        
+        // Actualizar última actividad
+        if (lastActivity) {
+            if (data.last_activity) {
+                const activityDate = new Date(data.last_activity);
+                const now = new Date();
+                const diffMinutes = Math.floor((now - activityDate) / (1000 * 60));
+                
+                if (diffMinutes < 1) {
+                    lastActivity.textContent = '(Hace menos de 1 minuto)';
+                } else if (diffMinutes < 60) {
+                    lastActivity.textContent = `(Hace ${diffMinutes} minutos)`;
+                } else if (diffMinutes < 1440) {
+                    const hours = Math.floor(diffMinutes / 60);
+                    lastActivity.textContent = `(Hace ${hours} horas)`;
+                } else {
+                    lastActivity.textContent = '(Hace más de 1 día)';
+                }
+            } else {
+                lastActivity.textContent = '';
+            }
+        }
+        
+        // Actualizar información del usuario
+        const userInfo = document.getElementById('device-user-info');
+        const userName = document.getElementById('device-user-name');
+        const userRegistration = document.getElementById('device-user-registration');
+        const userEmail = document.getElementById('device-user-email');
+        
+        console.log('🔧 Datos del usuario recibidos:', {
+            user: data.user,
+            user_name: data.user_name,
+            hab_name: data.hab_name,
+            user_registration: data.user_registration,
+            hab_registration: data.hab_registration,
+            user_email: data.user_email,
+            hab_email: data.hab_email
+        });
+        
+        console.log('🔧 Elementos DOM de usuario encontrados:', {
+            userInfo: !!userInfo,
+            userName: !!userName,
+            userRegistration: !!userRegistration,
+            userEmail: !!userEmail
+        });
+        
+        if (userInfo && userName && userRegistration && userEmail) {
+            // Siempre mostrar información del usuario, usar valores por defecto si no hay datos
+            const displayName = data.user || data.user_name || data.hab_name || 'Sin usuario';
+            const displayRegistration = data.user_registration || data.hab_registration || '---';
+            const displayEmail = data.user_email || data.hab_email || '---';
+            
+            console.log('🔧 Valores a mostrar:', {
+                displayName,
+                displayRegistration,
+                displayEmail
+            });
+            
+            // Actualizar los elementos DOM
+            userName.textContent = displayName;
+            userRegistration.textContent = displayRegistration;
+            userEmail.textContent = displayEmail;
+            userInfo.style.display = 'block';
+            
+            // Verificar que se actualizó correctamente
+            console.log('🔧 Valores después de actualizar:', {
+                userName: userName.textContent,
+                userRegistration: userRegistration.textContent,
+                userEmail: userEmail.textContent,
+                userInfoVisible: userInfo.style.display
+            });
+            
+            console.log('✅ Información del usuario actualizada:', {
+                nombre: displayName,
+                matricula: displayRegistration,
+                correo: displayEmail
+            });
+        } else {
+            console.error('❌ No se encontraron elementos HTML para mostrar información del usuario');
+            console.error('❌ Elementos faltantes:', {
+                userInfo: !userInfo ? 'FALTA' : 'OK',
+                userName: !userName ? 'FALTA' : 'OK',
+                userRegistration: !userRegistration ? 'FALTA' : 'OK',
+                userEmail: !userEmail ? 'FALTA' : 'OK'
+            });
+        }
+    }
+}
+
 // Hacer funciones disponibles globalmente
 window.updateDashboardStats = updateDashboardStats;
+window.updateDeviceStatus = updateDeviceStatus;
+window.updateDeviceStatusUI = updateDeviceStatusUI;
+
+// Función de test para simular estados (útil para desarrollo)
+function testDeviceStatus(state, online) {
+    const selectedDevice = document.getElementById("device_id")?.value || 'TEST_DEVICE';
+    updateDeviceStatusUI({
+        device: selectedDevice,
+        alias: 'Dispositivo de Prueba',
+        state: state || 'on',
+        online: online !== undefined ? online : true,
+        last_activity: new Date().toISOString()
+    });
+    console.log(`Test: Estado del dispositivo simulado - ${state}, online: ${online}`);
+}
+
+window.testDeviceStatus = testDeviceStatus;
 
 // Función para auto-refresh de datos del dashboard
 function setupAutoRefresh() {
     // Actualizar estadísticas cada 30 segundos
     setInterval(updateDashboardStats, 30000);
+    
+    // Actualizar estado del dispositivo cada 5 segundos
+    setInterval(updateDeviceStatus, 5000);
     
     // Auto-refresh completo cada 5 minutos (como en legacy)
     setInterval(() => {
@@ -362,8 +670,16 @@ if (!window.dashboardLegacyInitialized) {
             deviceSelect.addEventListener('change', function() {
                 syncSerieInput();
                 updateDashboardStats();
+                updateDeviceStatus(); // Actualizar estado inmediatamente al cambiar dispositivo
             });
         }
+        
+        // Actualizar estado inicial del dispositivo
+        updateDeviceStatus();
+        
+        console.log('✅ Sistema de monitoreo del estado del dispositivo iniciado');
+        console.log('ℹ️  Actualizaciones automáticas cada 5 segundos');
+        console.log('🧪 Función de test disponible: testDeviceStatus("on", true)');
         
         // Configurar formulario de filtro
         const filterForm = document.querySelector('form[method="GET"]');
@@ -390,6 +706,8 @@ window.DashboardLegacy = {
     updateMqttStatus,
     syncSerieInput,
     updateDashboardStats,
+    updateDeviceStatus,
+    updateDeviceStatusUI,
     showNotification,
     generarCadenaAleatoria,
     // Variables del estado
@@ -407,6 +725,8 @@ console.log('🔧 Funciones globales disponibles:', {
     updateMqttStatus: typeof window.updateMqttStatus,
     syncSerieInput: typeof window.syncSerieInput,
     updateDashboardStats: typeof window.updateDashboardStats,
+    updateDeviceStatus: typeof window.updateDeviceStatus,
+    updateDeviceStatusUI: typeof window.updateDeviceStatusUI,
     showNotification: typeof window.showNotification,
     generarCadenaAleatoria: typeof window.generarCadenaAleatoria,
     initAudio: typeof window.initAudio,
