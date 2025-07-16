@@ -3,8 +3,6 @@ $title = "USUARIO PRESTAMOS - SMARTLABS";
 include __DIR__ . '/../layout/header.php'; 
 ?>
 
-<?php include __DIR__ . '/../layout/sidebar.php'; ?>
-
 <!-- content -->
 <div id="content" class="app-content box-shadow-z0" role="main">
   <div class="app-header white box-shadow">
@@ -612,4 +610,4 @@ function mostrarResultadosBusqueda(users) {
 }
 </script>
 
-<?php include __DIR__ . '/../layout/footer.php'; ?> 
+<?php include __DIR__ . '/../layout/footer.php'; ?>

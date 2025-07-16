@@ -1,4 +1,4 @@
-    <!-- BARRA IZQUIERDA -->
+<!-- BARRA IZQUIERDA -->
     <div id="aside" class="app-aside modal nav-dropdown">
       <div class="left navside dark dk" data-layout="column">
         <div class="navbar no-radius">
@@ -62,7 +62,7 @@
               <li>
                 <a href="/LoanAdmin">
                   <span class="nav-icon">
-                    <i class="fa fa-user-cog"></i>
+                    <i class="fa fa-users"></i>
                   </span>
                   <span class="nav-text">Admin Préstamos</span>
                 </a>
@@ -78,6 +78,15 @@
               </li>
 
               <li>
+                <a href="/Becarios">
+                  <span class="nav-icon">
+                    <i class="fa fa-graduation-cap"></i>
+                  </span>
+                  <span class="nav-text">Gestión de Becarios</span>
+                </a>
+              </li>
+
+              <li>
                 <a href="/Auth/logout">
                   <span class="nav-icon">
                     <i class="fa fa-sign-out"></i>
@@ -89,4 +98,4 @@
           </nav>
         </div>
       </div>
-    </div> 
+    </div>
