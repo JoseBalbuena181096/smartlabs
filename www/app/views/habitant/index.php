@@ -507,7 +507,7 @@ function searchByRFID(rfid) {
 </script>
 
 <!-- MQTT Library -->
-<script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+<script src="/libs/mqtt/dist/mqtt.min.js"></script>
 
 <!-- Audio Notification -->
 <script src="/js/audio-notification.js"></script>
@@ -869,4 +869,4 @@ document.head.appendChild(style);
 
 </script>
 
-<?php include __DIR__ . '/../layout/footer.php'; ?> 
+<?php include __DIR__ . '/../layout/footer.php'; ?>

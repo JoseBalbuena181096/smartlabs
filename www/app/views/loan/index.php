@@ -193,7 +193,7 @@ include __DIR__ . '/../layout/header.php';
 
 <!-- Scripts -->
 <script src="libs/jquerymin/jquery.min.js"></script>
-<script src="libs/mqtt/dist/mqtt.min.js"></script>
+<script src="/libs/mqtt/dist/mqtt.min.js"></script>
 
 <script type="text/javascript">
 /*

@@ -15,8 +15,57 @@ window.DeviceStatusConfig = {
         getUrl: function() {
             if (this.url) return this.url;
             
-            // Forzar localhost para WebSocket durante desarrollo
-            return 'ws://localhost:3000';
+            // Detectar automáticamente la URL correcta
+            const hostname = window.location.hostname;
+            
+            // Si accedemos desde localhost, usar localhost para WebSocket
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'ws://localhost:3000';
+            }
+            // Si accedemos desde la IP externa (192.168.0.100)
+            else if (hostname === '192.168.0.100') {
+                // Verificar si estamos en el servidor (mismo computador)
+                // Si la página se carga desde 192.168.0.100 pero estamos en el servidor,
+                // usar localhost para evitar problemas de red interna
+                try {
+                    // Intentar detectar si somos el servidor verificando la IP local
+                    const isServer = this.isLocalServer();
+                    if (isServer) {
+                        return 'ws://localhost:3000';
+                    } else {
+                        return 'ws://192.168.0.100:3000';
+                    }
+                } catch (e) {
+                    // Fallback: usar la IP externa
+                    return 'ws://192.168.0.100:3000';
+                }
+            }
+            // Fallback: usar el mismo hostname que la página web
+            else {
+                return `ws://${hostname}:3000`;
+            }
+        },
+        
+        // Función para detectar si estamos en el servidor local
+        isLocalServer: function() {
+            // Verificar si tenemos acceso a APIs del servidor o características específicas
+            // que solo estarían disponibles en el servidor local
+            try {
+                // Verificar si hay una variable global que indique que somos el servidor
+                if (window.SMARTLABS_IS_SERVER === true) {
+                    return true;
+                }
+                
+                // Verificar si estamos en desarrollo (puerto común de desarrollo)
+                if (window.location.port === '80' || window.location.port === '') {
+                    // En producción, asumir que si accedemos vía IP externa somos remotos
+                    return false;
+                }
+                
+                return false;
+            } catch (e) {
+                return false;
+            }
         }
     },
     
@@ -189,4 +238,4 @@ document.addEventListener('DOMContentLoaded', function() {
     window.DeviceStatusConfig.init();
 });
 
-console.log('🔧 device-status-config.js cargado completamente'); 
+console.log('🔧 device-status-config.js cargado completamente');

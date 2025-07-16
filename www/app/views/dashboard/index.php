@@ -411,13 +411,31 @@ include __DIR__ . '/../layout/header.php';
 </div>
 
 <!-- Scripts MQTT y funcionalidades -->
-<script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+<script src="/libs/mqtt/dist/mqtt.min.js"></script>
 <script src="<?php echo '/public/js/navigation.js'; ?>"></script>
 <script src="<?php echo '/public/js/device-status-config.js'; ?>"></script>
 <script src="<?php echo '/public/js/dashboard-legacy.js'; ?>"></script>
 <script src="<?php echo '/public/js/device-status-monitor.js'; ?>"></script>
 <script src="<?php echo '/public/js/device-status-websocket.js'; ?>"></script>
 <script>
+// Configuración global del dashboard
+window.SMARTLABS = window.SMARTLABS || {};
+window.SMARTLABS.dashboard = {
+  selectedDevice: null,
+  isInitialized: false
+};
+
+// Detectar si estamos en el servidor local
+// Esto ayuda a determinar si usar localhost o IP externa para WebSocket
+<?php
+$server_ip = $_SERVER['SERVER_ADDR'] ?? $_SERVER['LOCAL_ADDR'] ?? 'unknown';
+$client_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$is_local_server = ($server_ip === '192.168.0.100' && ($client_ip === '192.168.0.100' || $client_ip === '127.0.0.1' || $client_ip === 'localhost'));
+echo "window.SMARTLABS_IS_SERVER = " . ($is_local_server ? 'true' : 'false') . ";\n";
+echo "window.SMARTLABS_SERVER_IP = '" . $server_ip . "';\n";
+echo "window.SMARTLABS_CLIENT_IP = '" . $client_ip . "';\n";
+?>
+
 // Test inmediato después de cargar dashboard-legacy.js
 console.log('🔧 Verificando funciones inmediatamente después de cargar dashboard-legacy.js');
 console.log('🔧 window.command:', typeof window.command);
@@ -832,9 +850,9 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
     
-    // Intentar inicializar WebSocket con URL forzada
+    // Intentar inicializar WebSocket con URL automática
     try {
-      const wsUrl = 'ws://localhost:3000';
+      const wsUrl = window.DeviceStatusConfig.websocket.getUrl();
       console.log('🔧 Conectando WebSocket a:', wsUrl);
       initDeviceStatusWS(wsUrl);
     } catch (e) {
@@ -896,4 +914,4 @@ if (typeof $ !== 'undefined') {
 }
 </script>
 
-<?php include __DIR__ . '/../layout/footer.php'; ?> 
+<?php include __DIR__ . '/../layout/footer.php'; ?>

@@ -9,7 +9,7 @@ window.SmartLabsConfig = {
     
     // Configuración MQTT
     mqtt: {
-        brokerUrl: 'wss://192.168.0.100:8074/mqtt',
+        brokerUrl: 'ws://localhost:8083/mqtt',
         username: 'jose',
         password: 'public',
         clientId: 'iotmc' + Math.random().toString(16).substr(2, 8),
@@ -197,4 +197,4 @@ document.addEventListener('DOMContentLoaded', function() {
 // Exportar configuración para módulos ES6 si están disponibles
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = window.SmartLabsConfig;
-} 
+}

@@ -24,8 +24,8 @@ window.deviceStatusWS = {
  * @param {string} serverUrl - URL del servidor WebSocket (opcional)
  */
 function initDeviceStatusWS(serverUrl) {
-    // URL por defecto (ajustar según configuración del servidor)
-    const wsUrl = serverUrl || 'ws://localhost:3000';
+    // URL por defecto usando configuración automática
+    const wsUrl = serverUrl || (window.DeviceStatusConfig ? window.DeviceStatusConfig.websocket.getUrl() : 'ws://localhost:3000');
     
     console.log('Inicializando conexión WebSocket a:', wsUrl);
     
@@ -93,7 +93,9 @@ function initDeviceStatusWS(serverUrl) {
                 console.log(`Reintentando conexión (${window.deviceStatusWS.reconnectAttempts}/${window.deviceStatusWS.maxReconnectAttempts})...`);
                 
                 setTimeout(function() {
-                    initDeviceStatusWS(wsUrl);
+                    // Usar configuración automática para la reconexión
+                    const reconnectUrl = window.DeviceStatusConfig ? window.DeviceStatusConfig.websocket.getUrl() : 'ws://localhost:3000';
+                    initDeviceStatusWS(reconnectUrl);
                 }, window.deviceStatusWS.reconnectInterval);
             } else {
                 console.error('Máximo número de intentos de reconexión alcanzado');
@@ -461,4 +463,4 @@ function processDeviceStatusMQTTMessage(topic, message) {
 window.initDeviceStatusMQTT = initDeviceStatusMQTT;
 window.subscribeToDeviceStatusTopics = subscribeToDeviceStatusTopics;
 
-console.log('🔧 device-status-websocket.js cargado completamente'); 
+console.log('🔧 device-status-websocket.js cargado completamente');

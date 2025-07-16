@@ -336,7 +336,7 @@ include __DIR__ . '/../layout/header.php';
 </div>
 
 <!-- Incluir librerías MQTT -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+<script src="/libs/mqtt/dist/mqtt.min.js"></script>
 
 <script>
 /*
@@ -887,4 +887,4 @@ addPulseEffect();
 console.log('=== INICIALIZACIÓN COMPLETA ===');
 </script>
 
-<?php include __DIR__ . '/../layout/footer.php'; ?> 
+<?php include __DIR__ . '/../layout/footer.php'; ?>

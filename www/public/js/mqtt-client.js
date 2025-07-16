@@ -4,7 +4,7 @@
  */
 
 class SmartLabsMQTT {
-    constructor(brokerUrl = 'wss://192.168.0.100:8074/mqtt', options = {}) {
+    constructor(brokerUrl = 'ws://localhost:8083/mqtt', options = {}) {
         this.brokerUrl = brokerUrl;
         this.client = null;
         this.isConnected = false;
@@ -323,4 +323,4 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-}); 
+});

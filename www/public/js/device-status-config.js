@@ -15,9 +15,57 @@ window.DeviceStatusConfig = {
         getUrl: function() {
             if (this.url) return this.url;
             
-            // Forzar localhost para WebSocket siempre
-            return 'ws://localhost:3000';
-        }
+            // Detectar automáticamente la URL correcta
+            const hostname = window.location.hostname;
+            
+            // Si accedemos desde localhost, usar localhost para WebSocket
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'ws://localhost:3000';
+            }
+            // Si accedemos desde la IP externa (192.168.0.100)
+            else if (hostname === '192.168.0.100') {
+                // Verificar si estamos en el servidor (mismo computador)
+                // Si la página se carga desde 192.168.0.100 pero estamos en el servidor,
+                // usar localhost para evitar problemas de red interna
+                try {
+                    // Intentar detectar si somos el servidor verificando la IP local
+                    const isServer = this.isLocalServer();
+                    if (isServer) {
+                        return 'ws://localhost:3000';
+                    } else {
+                        return 'ws://192.168.0.100:3000';
+                    }
+                } catch (e) {
+                    // Fallback: usar la IP externa
+                    return 'ws://192.168.0.100:3000';
+                }
+            }
+            // Fallback: usar el mismo hostname que la página web
+            else {
+                return `ws://${hostname}:3000`;
+            }
+        },
+        
+        // Función para detectar si estamos en el servidor local
+         isLocalServer: function() {
+             try {
+                 // Verificar si hay una variable global que indique que somos el servidor
+                 const isServer = window.SMARTLABS_IS_SERVER === true;
+                 
+                 // Debug: mostrar información de detección
+                 console.log('🔧 Detección de servidor local:');
+                 console.log('   - SMARTLABS_IS_SERVER:', window.SMARTLABS_IS_SERVER);
+                 console.log('   - SERVER_IP:', window.SMARTLABS_SERVER_IP);
+                 console.log('   - CLIENT_IP:', window.SMARTLABS_CLIENT_IP);
+                 console.log('   - Hostname:', window.location.hostname);
+                 console.log('   - Es servidor local:', isServer);
+                 
+                 return isServer;
+             } catch (e) {
+                 console.warn('⚠️ Error detectando servidor local:', e);
+                 return false;
+             }
+         }
     },
     
     // Configuración MQTT
@@ -189,4 +237,4 @@ document.addEventListener('DOMContentLoaded', function() {
     window.DeviceStatusConfig.init();
 });
 
-console.log('🔧 device-status-config.js cargado completamente'); 
+console.log('🔧 device-status-config.js cargado completamente');
