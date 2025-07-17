@@ -296,9 +296,11 @@ function initDeviceStatusMQTT(brokerUrl) {
     console.log('Inicializando conexión MQTT para estado de dispositivos:', mqttUrl);
     
     try {
-        // Crear cliente MQTT
+        // Crear cliente MQTT con credenciales
         window.deviceStatusMQTT.client = mqtt.connect(mqttUrl, {
             clientId: 'device-status-' + Math.random().toString(16).substr(2, 8),
+            username: 'jose',
+            password: 'public',
             clean: true,
             reconnectPeriod: 5000,
             keepalive: 60

@@ -638,8 +638,28 @@ const mqttOptions = {
     connectTimeout: 4000,
 };
 
-// URL del WebSocket MQTT
-const MQTT_WS_URL = 'wss://192.168.0.100:8074/mqtt'; // Usando wss como en el legacy
+// Configuración dinámica de URL MQTT WebSocket
+let MQTT_WS_URL;
+const hostname = window.location.hostname;
+
+console.log('🔧 Detectando configuración MQTT para hostname:', hostname);
+
+// Determinar URL correcta basada en el hostname
+if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // Acceso desde localhost - usar WSS seguro
+    MQTT_WS_URL = 'wss://localhost:8074/mqtt';
+    console.log('📡 Configuración MQTT: Acceso local detectado (WSS)');
+} else if (hostname === '192.168.0.100') {
+    // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
+    MQTT_WS_URL = 'ws://192.168.0.100:8073/mqtt';
+    console.log('📡 Configuración MQTT: Acceso desde red externa detectado (WS)');
+} else {
+    // Fallback - usar WS no seguro
+    MQTT_WS_URL = `ws://${hostname}:8073/mqtt`;
+    console.log('📡 Configuración MQTT: Usando hostname dinámico (WS)');
+}
+
+console.log('📡 URL MQTT WebSocket:', MQTT_WS_URL);
 
 // Conectar MQTT
 function connectMQTT() {

@@ -290,15 +290,37 @@ window.deviceStatusMQTT = {
  * @param {string} brokerUrl - URL del broker MQTT (opcional)
  */
 function initDeviceStatusMQTT(brokerUrl) {
-    // Usar broker por defecto si no se especifica
-    const mqttUrl = brokerUrl || 'ws://localhost:8083/mqtt';
+    // Configuración dinámica de URL MQTT si no se especifica
+    let mqttUrl = brokerUrl;
+    
+    if (!mqttUrl) {
+        const hostname = window.location.hostname;
+        console.log('🔧 Detectando configuración MQTT para hostname:', hostname);
+        
+        // Determinar URL correcta basada en el hostname
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            // Acceso desde localhost - usar localhost
+            mqttUrl = 'ws://localhost:8083/mqtt';
+            console.log('📡 Configuración MQTT: Acceso local detectado');
+        } else if (hostname === '192.168.0.100') {
+            // Acceso desde IP externa - usar IP externa  
+            mqttUrl = 'ws://192.168.0.100:8073/mqtt';
+            console.log('📡 Configuración MQTT: Acceso desde red externa detectado');
+        } else {
+            // Fallback - usar el mismo hostname
+            mqttUrl = `ws://${hostname}:8083/mqtt`;
+            console.log('📡 Configuración MQTT: Usando hostname dinámico');
+        }
+    }
     
     console.log('Inicializando conexión MQTT para estado de dispositivos:', mqttUrl);
     
     try {
-        // Crear cliente MQTT
+        // Crear cliente MQTT con credenciales
         window.deviceStatusMQTT.client = mqtt.connect(mqttUrl, {
             clientId: 'device-status-' + Math.random().toString(16).substr(2, 8),
+            username: 'jose',
+            password: 'public',
             clean: true,
             reconnectPeriod: 5000,
             keepalive: 60

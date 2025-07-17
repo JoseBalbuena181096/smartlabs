@@ -82,14 +82,27 @@ window.DeviceStatusConfig = {
             
             // Determinar protocolo y host correctos
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            let hostname = window.location.hostname;
+            const hostname = window.location.hostname;
             
-            // Si estamos en la IP externa, usar localhost para MQTT
-            if (hostname === '192.168.0.100') {
-                hostname = 'localhost';
+            console.log('🔧 Detectando configuración MQTT para hostname:', hostname);
+            
+            // Determinar URL correcta basada en el hostname
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                // Acceso desde localhost - usar localhost
+                const url = `${protocol}//localhost:8083/mqtt`;
+                console.log('📡 Configuración MQTT: Acceso local detectado');
+                return url;
+            } else if (hostname === '192.168.0.100') {
+                // Acceso desde IP externa - usar IP externa con puerto mapeado
+                const url = `${protocol}//192.168.0.100:8073/mqtt`;
+                console.log('📡 Configuración MQTT: Acceso desde red externa detectado');
+                return url;
+            } else {
+                // Fallback - usar el mismo hostname
+                const url = `${protocol}//${hostname}:8083/mqtt`;
+                console.log('📡 Configuración MQTT: Usando hostname dinámico');
+                return url;
             }
-            
-            return `${protocol}//${hostname}:8083/mqtt`;
         },
         
         // Tópicos de estado

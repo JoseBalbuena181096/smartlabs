@@ -328,8 +328,28 @@ const options = {
 
 var connected = false;
 
-// URL de conexión WebSocket
-const WebSocket_URL = 'wss://192.168.0.100:8074/mqtt'
+// Configuración dinámica de URL MQTT WebSocket
+let WebSocket_URL;
+const hostname = window.location.hostname;
+
+console.log('🔧 Detectando configuración MQTT para hostname:', hostname);
+
+// Determinar URL correcta basada en el hostname
+if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // Acceso desde localhost - usar WSS seguro
+    WebSocket_URL = 'wss://localhost:8074/mqtt';
+    console.log('📡 Configuración MQTT: Acceso local detectado (WSS)');
+} else if (hostname === '192.168.0.100') {
+    // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
+    WebSocket_URL = 'ws://192.168.0.100:8073/mqtt';
+    console.log('📡 Configuración MQTT: Acceso desde red externa detectado (WS)');
+} else {
+    // Fallback - usar WS no seguro
+    WebSocket_URL = `ws://${hostname}:8073/mqtt`;
+    console.log('📡 Configuración MQTT: Usando hostname dinámico (WS)');
+}
+
+console.log('📡 URL MQTT WebSocket:', WebSocket_URL);
 const client = mqtt.connect(WebSocket_URL, options);
 
 client.on('connect', () => {

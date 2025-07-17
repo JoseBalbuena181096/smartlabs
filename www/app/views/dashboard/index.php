@@ -864,9 +864,28 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof initDeviceStatusMQTT === 'function') {
     console.log('✓ Inicializando MQTT para estado...');
     
-    // Intentar inicializar MQTT con URL forzada
+    // Configuración dinámica de URL MQTT
     try {
-      const mqttUrl = 'ws://localhost:8083/mqtt';
+      let mqttUrl;
+      const hostname = window.location.hostname;
+      
+      console.log('🔧 Detectando configuración MQTT para hostname:', hostname);
+      
+      // Determinar URL correcta basada en el hostname
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // Acceso desde localhost - usar localhost
+        mqttUrl = 'ws://localhost:8083/mqtt';
+        console.log('📡 Configuración MQTT: Acceso local detectado');
+      } else if (hostname === '192.168.0.100') {
+        // Acceso desde IP externa - usar IP externa
+        mqttUrl = 'ws://192.168.0.100:8073/mqtt';
+        console.log('📡 Configuración MQTT: Acceso desde red externa detectado');
+      } else {
+        // Fallback - usar el mismo hostname
+        mqttUrl = `ws://${hostname}:8083/mqtt`;
+        console.log('📡 Configuración MQTT: Usando hostname dinámico');
+      }
+      
       console.log('🔧 Conectando MQTT a:', mqttUrl);
       initDeviceStatusMQTT(mqttUrl);
       
