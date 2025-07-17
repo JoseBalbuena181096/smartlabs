@@ -1,368 +1,433 @@
-var mysql = require('mysql');
-var mqtt = require('mqtt');
-var serial_loan_user=null;
-var count_loan_card = 0;
-//CREDENCIALES MYSQL
+const mysql = require('mysql2/promise');
+const mqtt = require('mqtt');
 
-var con = mysql.createConnection({
-    host: "192.168.0.100",
-    user: "root",
-    password: "emqxpass",
-    database: "emqx",
-    port: '4000'
-});
-
-//CREDENCIALES MQTT
-var options = {
-    port: 1883,
-    host: '192.168.0.100',
-    clientId: 'access_control_server_' + Math.round(Math.random() * (0- 10000) * -1) ,
-    username: 'jose',
-    password: 'public',
-    keepalive: 60,
-    reconnectPeriod: 1000,
-    protocolId: 'MQIsdp',
-    protocolVersion: 3,
-    clean: true,
-    encoding: 'utf8'
-  };
-  
-
-var client = mqtt.connect("mqtt://192.168.0.100", options);
-//SE REALIZA LA CONEXION
-client.on('connect', function () {
-    console.log("Conexión  MQTT Exitosa!!");
-    client.subscribe('+/#', function (err) {
-      console.log("Subscripción exitosa!")
-    });
-});
-  
-//CUANDO SE RECIBE MENSAJE
-client.on('message', function (topic, message) {
-  console.log("Mensaje recibido desde -> " + topic + " Mensaje -> " + message.toString());
-
-  var topic_splitted = topic.split("/");
-  var serial_number = topic_splitted[0];
-  var query = topic_splitted[1];
-
-  if(query=="access_query"){
-    var rfid_number = message.toString();
-    //hacemos la consulta
-    //var query = "SELECT * FROM cards_habs WHERE cards_number = '" + rfid_number + "' AND devices_serie = '" + serial_number + "'";
-    var query = "SELECT * FROM cards_habs WHERE cards_number = '" + rfid_number+ "'";
-    con.query(query, function (err, result_, fields) {
-      console.log(result_);
-      if (err) throw err;
-      //consultamos rfid y devolvemos mensaje
-      if(result_.length==1){
-        //GRANTED
-        client.publish(serial_number + "/user_name",result_[0].hab_name);
+/**
+ * Servidor IoT MQTT refactorizado para SMARTLABS
+ * Maneja control de acceso, préstamos de equipos y datos de sensores
+ */
+class IoTMQTTServer {
+    constructor() {
+        this.dbConnection = null;
+        this.mqttClient = null;
+        this.serialLoanUser = null;
+        this.countLoanCard = 0;
         
-        // Nombre del dispositivo específico que estás buscando
-        var trafficDevice = serial_number;
-        // Consulta para obtener la última inserción para el dispositivo específico
-        const selectQuery = `
-          SELECT *
-          FROM traffic
-          WHERE traffic_device = ? 
-          ORDER BY traffic_date DESC
-          LIMIT 1
-        `;
-        // Inserta una nueva fila con traffic_state 1 si no existe, o actualiza según los criterios
-        con.query(selectQuery, [trafficDevice], (error, results) => {
-          if (err) throw err;
-          if (results.length === 0) {
-            // No hay registros para el dispositivo, inserta un nuevo elemento por defecto
-            const insertQuery = `
-              INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state)
-              VALUES (CURRENT_TIMESTAMP, ?, ?, 1)
-            `;
-            con.query(insertQuery, [result_[0].hab_id, trafficDevice], (insertError, insertResults) => {
-              if (insertError) {
-                console.error('Error al insertar un nuevo elemento:', insertError);
-              } 
-              else {
-                console.log('Nuevo elemento insertado con éxito');
-              }
-            });
-            client.publish(serial_number + "/command","granted1");
-            console.log("Acceso permitido a..." + result_[0].hab_name);
-          } 
-          else {
-            // Hay un registro para el dispositivo, actualiza según los criterios especificados
-            const lastTrafficState = results[0].traffic_state;
-            // Determina el nuevo valor para traffic_state
-            const newTrafficState = (lastTrafficState === 1) ? 0 : 1;
-            // Inserta una nueva fila con el nuevo valor de traffic_state
-            const updateQuery = `
-              INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state)
-              VALUES (CURRENT_TIMESTAMP, ?, ?, ?)
-            `;
-            con.query(updateQuery, [result_[0].hab_id, trafficDevice, newTrafficState], (updateError, updateResults) => {
-              if (updateError) {
-                console.error('Error al insertar un nuevo elemento con actualización de traffic_state:', updateError);
-              } 
-              else {
-                console.log('Nuevo elemento insertado con éxito');
-              }
-            });
-            if(newTrafficState){
-              client.publish(serial_number + "/command","granted1");
-              console.log("Acceso permitido a..." + result_[0].hab_name);
-            }
-            else{
-              client.publish(serial_number + "/command","granted0");
-              console.log("Acceso permitido a..." + result_[0].hab_name);
-            }
-          }
-        });
-       // var query = "INSERT INTO `traffic` (`traffic_hab_id`,`traffic_device`) VALUES (" + result[0].hab_id +","+serial_number+ ");";
-       // con.query(query, function (err, result, fields) {
-       //   if (err) throw err;
-       //   console.log("Ingreso registrado en 'TRAFFIC' ");
-       // });
-      }else{
-        //REFUSED
-        client.publish(serial_number + "/command","refused");
-      }
-
-    });
-
-  }
-
-  // Becarios
-  if(query=="scholar_query"){
-    var rfid_number = message.toString();
-    //hacemos la consulta
-    //var query = "SELECT * FROM cards_habs WHERE cards_number = '" + rfid_number + "' AND devices_serie = '" + serial_number + "'";
-    var query = "SELECT * FROM cards_habs WHERE cards_number = '" + rfid_number+ "'";
-    con.query(query, function (err, result_, fields) {
-      console.log(result_);
-      if (err) throw err;
-      //consultamos rfid y devolvemos mensaje
-      if(result_.length==1){
-        //GRANTED
-        client.publish(serial_number + "/user_name",result_[0].hab_name);
+        // Configuración de base de datos
+        this.dbConfig = {
+            host: "192.168.0.100",
+            user: "root",
+            password: "emqxpass",
+            database: "emqx",
+            port: 4000,
+            acquireTimeout: 60000,
+            timeout: 60000,
+            reconnect: true
+        };
         
-        // Nombre del dispositivo específico que estás buscando
-        var trafficDevice = serial_number;
-        // Consulta para obtener la última inserción para el dispositivo específico
-        const selectQuery = `
-          SELECT *
-            FROM traffic
-            WHERE traffic_hab_id = ?
-            AND traffic_device = ?
-            ORDER BY traffic_date DESC
-            LIMIT 1
-        `;
-        // Inserta una nueva fila con traffic_state 1 si no existe, o actualiza según los criterios
-        con.query(selectQuery, [result_[0].hab_id, trafficDevice], (error, results) => {
-          if (err) throw err;
-          if (results.length === 0) {
-            // No hay registros para el dispositivo, inserta un nuevo elemento por defecto
-            const insertQuery = `
-              INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state)
-              VALUES (CURRENT_TIMESTAMP, ?, ?, 1)
-            `;
-            con.query(insertQuery, [result_[0].hab_id, trafficDevice], (insertError, insertResults) => {
-              if (insertError) {
-                console.error('Error al insertar un nuevo elemento:', insertError);
-              } 
-              else {
-                console.log('Nuevo elemento insertado con éxito');
-              }
-            });
-            client.publish(serial_number + "/command","granted1");
-            console.log("Becario ingreso ..." + result_[0].hab_name);
-          } 
-          else {
-            // Hay un registro para el dispositivo, actualiza según los criterios especificados
-            const lastTrafficState = results[0].traffic_state;
-            // Determina el nuevo valor para traffic_state
-            const newTrafficState = (lastTrafficState === 1) ? 0 : 1;
-            // Inserta una nueva fila con el nuevo valor de traffic_state
-            const updateQuery = `
-              INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state)
-              VALUES (CURRENT_TIMESTAMP, ?, ?, ?)
-            `;
-            con.query(updateQuery, [result_[0].hab_id, trafficDevice, newTrafficState], (updateError, updateResults) => {
-              if (updateError) {
-                console.error('Error al insertar un nuevo elemento con actualización de traffic_state:', updateError);
-              } 
-              else {
-                console.log('Nuevo elemento insertado con éxito');
-              }
-            });
-            if(newTrafficState){
-              client.publish(serial_number + "/command","granted1");
-              console.log("Acceso permitido a..." + result_[0].hab_name);
-            }
-            else{
-              client.publish(serial_number + "/command","granted0");
-              console.log("Acceso permitido a..." + result_[0].hab_name);
-            }
-          }
-        });
-       // var query = "INSERT INTO `traffic` (`traffic_hab_id`,`traffic_device`) VALUES (" + result[0].hab_id +","+serial_number+ ");";
-       // con.query(query, function (err, result, fields) {
-       //   if (err) throw err;
-       //   console.log("Ingreso registrado en 'TRAFFIC' ");
-       // });
-      }else{
-        //REFUSED
-        client.publish(serial_number + "/command","refused");
-      }
-
-    });
-
-  }
-
-
-  if(query=="loan_queryu"){
-    var rfid_number = message.toString();
-    //hacemos la consulta
-    console.log("user", rfid_number);
-    //var query = "SELECT * FROM cards_habs WHERE cards_number = '" + rfid_number + "' AND devices_serie = '" + serial_number + "'";
-    var query = "SELECT * FROM cards_habs WHERE cards_number = '" + rfid_number+ "'";
-    con.query(query, function (err, result_, fields) {
-      console.log(result_);
-      if (err) throw err;
-      //consultamos rfid y devolvemos mensaje
-      if(result_.length==1){
-        //GRANTED
-        if(count_loan_card===1){
-          client.publish(serial_number + "/command","unload");
-          count_loan_card = 0;
-          serial_loan_user = null;
-        }
-        else{
-          client.publish(serial_number + "/user_name",result_[0].hab_name);
-          client.publish(serial_number + "/command","found");
-          serial_loan_user = result_;
-          count_loan_card += 1;
-        }
-      }
-      else{
-        client.publish(serial_number + "/command","nofound");
-      }
-    });
-
-  }
-
-  if(query=="loan_querye" && count_loan_card !==0 && serial_loan_user!==null){
-    var rfid_number = message.toString();
-    var query_eq = "SELECT * FROM equipments WHERE equipments_rfid = '" + rfid_number+ "'";
-    con.query(query_eq, function (err, result_eq, fields) {
-      
-      if (err) throw err;
-      //consultamos rfid y devolvemos mensaje
-      if(result_eq.length==1){
-        client.publish(serial_number + "/user_name",result_eq[0].equipments_name);
-        //GRANTED
-        //console.log(result_[0].equipments_name);
-        console.log(result_eq);
-        const selectQueryLoans = `
-          SELECT *
-            FROM loans
-            WHERE loans_equip_rfid = ?
-            ORDER BY loans_date DESC
-            LIMIT 1
-        `;
-        con.query(selectQueryLoans, [result_eq[0].equipments_rfid], (error, resultsLoan) => {
-          if (err) throw err;
-          if (resultsLoan.length === 0) {
-            // No hay registros para el dispositivo, inserta un nuevo elemento por defecto
-            const insertQuery = `
-              INSERT INTO loans (loans_date, loans_hab_rfid, loans_equip_rfid, loans_state)
-              VALUES (CURRENT_TIMESTAMP, ?, ?, 1)
-            `;
-            con.query(insertQuery, [serial_loan_user[0].cards_number, result_eq[0].equipments_rfid], (insertError, insertResults) => {
-              if (insertError) {
-                console.error('Error al insertar un nuevo elemento:', insertError);
-              } 
-              else {
-                console.log('Nuevo elemento insertado con éxito');
-                 //client.publish(serial_number + "/command","granted1");
-                console.log("Prestamo exitoso ...");
-                client.publish(serial_number + "/command","prestado");
-              }
-            });
-          } 
-          else if(resultsLoan.length > 0) {
-            // Hay un registro para el dispositivo, actualiza según los criterios especificados
-            const lastLoanState = resultsLoan[0].loans_state;
-            // Determina el nuevo valor para traffic_state
-            const newLoanState = (lastLoanState === 1) ? 0 : 1;
-            // Inserta una nueva fila con el nuevo valor de traffic_state
-            const updateQuery = `
-              INSERT INTO loans (loans_date, loans_hab_rfid, loans_equip_rfid, loans_state)
-              VALUES (CURRENT_TIMESTAMP, ?, ?, ?)
-            `;
-            con.query(updateQuery, [serial_loan_user[0].cards_number, resultsLoan[0].loans_equip_rfid, newLoanState], (updateError, updateResults) => {
-              if (updateError) {
-                console.error('Error al insertar un nuevo elemento con actualización de traffic_state:', updateError);
-              } 
-              else {
-                console.log('Nuevo elemento insertado con éxito');
-              }
-              if(newLoanState===0){
-                client.publish(serial_number + "/command","devuelto");
-              }
-              else if(newLoanState===1){
-                client.publish(serial_number + "/command","prestado");
-              }
-            });
-          }
-        });
-      }
-      else{
-        client.publish(serial_number + "/command","nofound");
-      }
-    });
-  }
-  else if(query=="loan_querye" && serial_loan_user===null){
-    client.publish(serial_number + "/command","nologin");
-  }
-
-  if (topic == "values"){
-    var msg = message.toString();
-    var sp = msg.split(",");
-    var temp1 = sp[0];
-    var temp2 = sp[1];
-    var volts = sp[2];
-    //hacemos la consulta para insertar....
-    var query = "INSERT INTO `emqx`.`data` (`data_temp1`, `data_temp2`, `data_volts`) VALUES (" + temp1 + ", " + temp2 + ", " + volts + ");";
-    con.query(query, function (err, result, fields) {
-      if (err) throw err;
-      console.log("Fila insertada correctamente");
-    });
-  }
-});
-
-
-//nos conectamos
-con.connect(function(err){
-  if (err) throw err;
-
-  //una vez conectados, podemos hacer consultas.
-  console.log("Conexión a MYSQL exitosa!!!")
-
-  //hacemos la consulta
-  var query = "SELECT * FROM devices WHERE 1";
-  con.query(query, function (err, result, fields) {
-    if (err) throw err;
-    if(result.length>0){
-      console.log(result);
+        // Configuración MQTT
+        this.mqttOptions = {
+            port: 1883,
+            host: '192.168.0.100',
+            clientId: 'access_control_server_' + Math.round(Math.random() * 10000),
+            username: 'jose',
+            password: 'public',
+            keepalive: 60,
+            reconnectPeriod: 1000,
+            protocolId: 'MQIsdp',
+            protocolVersion: 3,
+            clean: true,
+            encoding: 'utf8'
+        };
     }
-  });
+    
+    /**
+     * Inicializa el servidor
+     */
+    async init() {
+        try {
+            console.log('🚀 Iniciando servidor IoT MQTT...');
+            
+            await this.connectToDatabase();
+            await this.connectToMQTT();
+            
+            // Configurar mantenimiento de conexión DB
+            this.setupDatabaseMaintenance();
+            
+            console.log('✅ Servidor IoT MQTT iniciado correctamente');
+        } catch (error) {
+            console.error('❌ Error iniciando servidor:', error);
+            process.exit(1);
+        }
+    }
+    
+    /**
+     * Conecta a la base de datos MySQL
+     */
+    async connectToDatabase() {
+        try {
+            console.log('🔌 Conectando a base de datos...');
+            this.dbConnection = await mysql.createConnection(this.dbConfig);
+            
+            // Probar conexión
+            await this.dbConnection.execute('SELECT 1');
+            console.log('✅ Conexión a MySQL exitosa');
+            
+            // Configurar manejo de errores
+            this.dbConnection.on('error', async (err) => {
+                console.error('❌ Error de base de datos:', err);
+                if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+                    console.log('🔄 Reconectando a la base de datos...');
+                    await this.reconnectDatabase();
+                }
+            });
+            
+        } catch (error) {
+            console.error('❌ Error conectando a base de datos:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * Reconecta a la base de datos
+     */
+    async reconnectDatabase() {
+        try {
+            if (this.dbConnection) {
+                await this.dbConnection.end();
+            }
+            await this.connectToDatabase();
+        } catch (error) {
+            console.error('❌ Error en reconexión de base de datos:', error);
+            setTimeout(() => this.reconnectDatabase(), 5000);
+        }
+    }
+    
+    /**
+     * Conecta al broker MQTT
+     */
+    async connectToMQTT() {
+        return new Promise((resolve, reject) => {
+            console.log('📡 Conectando a broker MQTT...');
+            
+            this.mqttClient = mqtt.connect(`mqtt://${this.mqttOptions.host}`, this.mqttOptions);
+            
+            this.mqttClient.on('connect', () => {
+                console.log('✅ Conexión MQTT exitosa');
+                
+                this.mqttClient.subscribe('+/#', (err) => {
+                    if (err) {
+                        console.error('❌ Error en suscripción MQTT:', err);
+                        reject(err);
+                    } else {
+                        console.log('✅ Suscripción MQTT exitosa');
+                        resolve();
+                    }
+                });
+            });
+            
+            this.mqttClient.on('message', (topic, message) => {
+                this.handleMQTTMessage(topic, message);
+            });
+            
+            this.mqttClient.on('error', (error) => {
+                console.error('❌ Error MQTT:', error);
+                reject(error);
+            });
+            
+            this.mqttClient.on('close', () => {
+                console.log('⚠️ Conexión MQTT cerrada');
+            });
+        });
+    }
+    
+    /**
+     * Maneja mensajes MQTT recibidos
+     */
+    async handleMQTTMessage(topic, message) {
+        try {
+            const messageStr = message.toString();
+            console.log(`📨 Mensaje recibido desde -> ${topic} Mensaje -> ${messageStr}`);
+            
+            const topicParts = topic.split("/");
+            const serialNumber = topicParts[0];
+            const query = topicParts[1];
+            
+            switch (query) {
+                case 'access_query':
+                    await this.handleAccessQuery(serialNumber, messageStr);
+                    break;
+                case 'scholar_query':
+                    await this.handleScholarQuery(serialNumber, messageStr);
+                    break;
+                case 'loan_queryu':
+                    await this.handleLoanUserQuery(serialNumber, messageStr);
+                    break;
+                case 'loan_querye':
+                    await this.handleLoanEquipmentQuery(serialNumber, messageStr);
+                    break;
+                default:
+                    if (topic === 'values') {
+                        await this.handleSensorData(messageStr);
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error('❌ Error procesando mensaje MQTT:', error);
+        }
+    }
+    
+    /**
+     * Maneja consultas de acceso
+     */
+    async handleAccessQuery(serialNumber, rfidNumber) {
+        try {
+            const [cards] = await this.dbConnection.execute(
+                'SELECT * FROM cards_habs WHERE cards_number = ?',
+                [rfidNumber]
+            );
+            
+            if (cards.length === 1) {
+                const card = cards[0];
+                this.mqttClient.publish(`${serialNumber}/user_name`, card.hab_name);
+                
+                // Obtener último registro de tráfico
+                const [traffic] = await this.dbConnection.execute(
+                    'SELECT * FROM traffic WHERE traffic_device = ? ORDER BY traffic_date DESC LIMIT 1',
+                    [serialNumber]
+                );
+                
+                let newTrafficState = 1;
+                
+                if (traffic.length > 0) {
+                    newTrafficState = traffic[0].traffic_state === 1 ? 0 : 1;
+                }
+                
+                // Insertar nuevo registro de tráfico
+                await this.dbConnection.execute(
+                    'INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)',
+                    [card.hab_id, serialNumber, newTrafficState]
+                );
+                
+                const command = newTrafficState ? 'granted1' : 'granted0';
+                this.mqttClient.publish(`${serialNumber}/command`, command);
+                
+                console.log(`✅ Acceso ${newTrafficState ? 'permitido' : 'denegado'} a ${card.hab_name}`);
+            } else {
+                this.mqttClient.publish(`${serialNumber}/command`, 'refused');
+                console.log('❌ Acceso denegado - RFID no encontrado');
+            }
+        } catch (error) {
+            console.error('❌ Error en consulta de acceso:', error);
+            this.mqttClient.publish(`${serialNumber}/command`, 'error');
+        }
+    }
+    
+    /**
+     * Maneja consultas de becarios
+     */
+    async handleScholarQuery(serialNumber, rfidNumber) {
+        try {
+            const [cards] = await this.dbConnection.execute(
+                'SELECT * FROM cards_habs WHERE cards_number = ?',
+                [rfidNumber]
+            );
+            
+            if (cards.length === 1) {
+                const card = cards[0];
+                this.mqttClient.publish(`${serialNumber}/user_name`, card.hab_name);
+                
+                // Obtener último registro específico del usuario y dispositivo
+                const [traffic] = await this.dbConnection.execute(
+                    'SELECT * FROM traffic WHERE traffic_hab_id = ? AND traffic_device = ? ORDER BY traffic_date DESC LIMIT 1',
+                    [card.hab_id, serialNumber]
+                );
+                
+                let newTrafficState = 1;
+                
+                if (traffic.length > 0) {
+                    newTrafficState = traffic[0].traffic_state === 1 ? 0 : 1;
+                }
+                
+                // Insertar nuevo registro
+                await this.dbConnection.execute(
+                    'INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)',
+                    [card.hab_id, serialNumber, newTrafficState]
+                );
+                
+                const command = newTrafficState ? 'granted1' : 'granted0';
+                this.mqttClient.publish(`${serialNumber}/command`, command);
+                
+                console.log(`✅ Becario ${newTrafficState ? 'ingreso' : 'salida'}: ${card.hab_name}`);
+            } else {
+                this.mqttClient.publish(`${serialNumber}/command`, 'refused');
+                console.log('❌ Becario no encontrado');
+            }
+        } catch (error) {
+            console.error('❌ Error en consulta de becario:', error);
+            this.mqttClient.publish(`${serialNumber}/command`, 'error');
+        }
+    }
+    
+    /**
+     * Maneja consultas de usuario para préstamos
+     */
+    async handleLoanUserQuery(serialNumber, rfidNumber) {
+        try {
+            const [cards] = await this.dbConnection.execute(
+                'SELECT * FROM cards_habs WHERE cards_number = ?',
+                [rfidNumber]
+            );
+            
+            if (cards.length === 1) {
+                if (this.countLoanCard === 1) {
+                    this.mqttClient.publish(`${serialNumber}/command`, 'unload');
+                    this.countLoanCard = 0;
+                    this.serialLoanUser = null;
+                    console.log('🔄 Sesión de préstamo reiniciada');
+                } else {
+                    this.mqttClient.publish(`${serialNumber}/user_name`, cards[0].hab_name);
+                    this.mqttClient.publish(`${serialNumber}/command`, 'found');
+                    this.serialLoanUser = cards;
+                    this.countLoanCard += 1;
+                    console.log(`✅ Usuario encontrado para préstamo: ${cards[0].hab_name}`);
+                }
+            } else {
+                this.mqttClient.publish(`${serialNumber}/command`, 'nofound');
+                console.log('❌ Usuario no encontrado para préstamo');
+            }
+        } catch (error) {
+            console.error('❌ Error en consulta de usuario para préstamo:', error);
+            this.mqttClient.publish(`${serialNumber}/command`, 'error');
+        }
+    }
+    
+    /**
+     * Maneja consultas de equipo para préstamos
+     */
+    async handleLoanEquipmentQuery(serialNumber, rfidNumber) {
+        try {
+            if (this.countLoanCard === 0 || this.serialLoanUser === null) {
+                this.mqttClient.publish(`${serialNumber}/command`, 'nologin');
+                console.log('⚠️ No hay usuario logueado para préstamo');
+                return;
+            }
+            
+            const [equipment] = await this.dbConnection.execute(
+                'SELECT * FROM equipments WHERE equipments_rfid = ?',
+                [rfidNumber]
+            );
+            
+            if (equipment.length === 1) {
+                const equip = equipment[0];
+                this.mqttClient.publish(`${serialNumber}/user_name`, equip.equipments_name);
+                
+                // Obtener último préstamo del equipo
+                const [loans] = await this.dbConnection.execute(
+                    'SELECT * FROM loans WHERE loans_equip_rfid = ? ORDER BY loans_date DESC LIMIT 1',
+                    [equip.equipments_rfid]
+                );
+                
+                let newLoanState = 1; // Por defecto: prestado
+                
+                if (loans.length > 0) {
+                    newLoanState = loans[0].loans_state === 1 ? 0 : 1;
+                }
+                
+                // Insertar nuevo registro de préstamo
+                await this.dbConnection.execute(
+                    'INSERT INTO loans (loans_date, loans_hab_rfid, loans_equip_rfid, loans_state) VALUES (CURRENT_TIMESTAMP, ?, ?, ?)',
+                    [this.serialLoanUser[0].cards_number, equip.equipments_rfid, newLoanState]
+                );
+                
+                const command = newLoanState === 1 ? 'prestado' : 'devuelto';
+                this.mqttClient.publish(`${serialNumber}/command`, command);
+                
+                console.log(`✅ Equipo ${command}: ${equip.equipments_name}`);
+            } else {
+                this.mqttClient.publish(`${serialNumber}/command`, 'nofound');
+                console.log('❌ Equipo no encontrado');
+            }
+        } catch (error) {
+            console.error('❌ Error en consulta de equipo para préstamo:', error);
+            this.mqttClient.publish(`${serialNumber}/command`, 'error');
+        }
+    }
+    
+    /**
+     * Maneja datos de sensores
+     */
+    async handleSensorData(message) {
+        try {
+            const parts = message.split(',');
+            if (parts.length >= 3) {
+                const temp1 = parseFloat(parts[0]);
+                const temp2 = parseFloat(parts[1]);
+                const volts = parseFloat(parts[2]);
+                
+                await this.dbConnection.execute(
+                    'INSERT INTO data (data_temp1, data_temp2, data_volts) VALUES (?, ?, ?)',
+                    [temp1, temp2, volts]
+                );
+                
+                console.log(`📊 Datos de sensores insertados: T1=${temp1}, T2=${temp2}, V=${volts}`);
+            }
+        } catch (error) {
+            console.error('❌ Error insertando datos de sensores:', error);
+        }
+    }
+    
+    /**
+     * Configura el mantenimiento de la conexión de base de datos
+     */
+    setupDatabaseMaintenance() {
+        setInterval(async () => {
+            try {
+                await this.dbConnection.execute('SELECT 1');
+                console.log('💓 Ping a base de datos - OK');
+                console.log('👤 Usuario de préstamo actual:', this.serialLoanUser ? this.serialLoanUser[0].hab_name : 'Ninguno');
+            } catch (error) {
+                console.error('❌ Error en ping de base de datos:', error);
+                await this.reconnectDatabase();
+            }
+        }, 5000);
+    }
+    
+    /**
+     * Cierra las conexiones del servidor
+     */
+    async shutdown() {
+        console.log('🛑 Cerrando servidor IoT MQTT...');
+        
+        if (this.mqttClient) {
+            this.mqttClient.end();
+        }
+        
+        if (this.dbConnection) {
+            await this.dbConnection.end();
+        }
+        
+        console.log('✅ Servidor cerrado correctamente');
+    }
+}
 
+// Inicializar y ejecutar el servidor
+const server = new IoTMQTTServer();
+
+// Manejo de señales para cierre limpio
+process.on('SIGINT', async () => {
+    console.log('\n🛑 Recibida señal SIGINT, cerrando servidor...');
+    await server.shutdown();
+    process.exit(0);
 });
 
-//para mantener la sesión con mysql abierta
-setInterval(function () {
-  var query ='SELECT 1 + 1 as result';
-  con.query(query, function (err, result, fields) {
-    if (err) throw err;
-  });
-  console.log("esto es ",serial_loan_user);
-}, 5000);
+process.on('SIGTERM', async () => {
+    console.log('\n🛑 Recibida señal SIGTERM, cerrando servidor...');
+    await server.shutdown();
+    process.exit(0);
+});
+
+// Iniciar el servidor
+server.init().catch((error) => {
+    console.error('❌ Error fatal:', error);
+    process.exit(1);
+});

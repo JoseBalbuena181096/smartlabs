@@ -1,17 +1,28 @@
 {
-  "name": "device-status-server",
-  "version": "1.0.0",
-  "description": "WebSocket server para monitoreo de estado de dispositivos SMARTLABS",
-  "main": "device-status-server.js",
+  "name": "smartlabs-iot-server",
+  "version": "2.0.0",
+  "description": "Servidor IoT MQTT refactorizado para SMARTLABS - Control de acceso y préstamos",
+  "main": "index.js",
   "scripts": {
-    "start": "node device-status-server.js",
-    "dev": "nodemon device-status-server.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "mysql": "^2.18.1",
-    "ws": "^8.13.0"
+    "mqtt": "^5.0.0",
+    "mysql2": "^3.6.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
-    "nodemon": "^2.0.22"
-  }
+    "nodemon": "^3.0.0"
+  },
+  "keywords": [
+    "iot",
+    "mqtt",
+    "mysql",
+    "smartlabs",
+    "access-control"
+  ],
+  "author": "SMARTLABS",
+  "license": "MIT"
 }

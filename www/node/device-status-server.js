@@ -5,7 +5,7 @@
  */
 
 const WebSocket = require('ws');
-const mysql = require('mysql');
+const mysql = require('mysql2');
 const http = require('http');
 
 // Configuración del servidor WebSocket
@@ -284,4 +284,4 @@ process.on('SIGINT', () => {
         console.log('Servidor cerrado');
         process.exit(0);
     });
-}); 
+});
