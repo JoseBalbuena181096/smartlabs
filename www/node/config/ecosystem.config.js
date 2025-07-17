@@ -1,8 +1,8 @@
 module.exports = {
   apps: [{
     name: 'device-status-server',
-    script: 'device-status-server.js',
-    cwd: '/c/Users/josetec/Desktop/smartlabs/www/node',
+    script: '../scripts/start-device-server.js',
+    cwd: '/c/laragon/www/node',
     instances: 1,
     exec_mode: 'fork',
     autorestart: true,
@@ -16,9 +16,9 @@ module.exports = {
       NODE_ENV: 'development',
       PORT: 3000
     },
-    log_file: './logs/combined.log',
-    out_file: './logs/out.log',
-    error_file: './logs/error.log',
+    log_file: '../logs/combined.log',
+    out_file: '../logs/out.log',
+    error_file: '../logs/error.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     merge_logs: true,
     time: true,
@@ -38,4 +38,4 @@ module.exports = {
     // Configuración para debugging
     node_args: '--max-old-space-size=512'
   }]
-}; 
+};

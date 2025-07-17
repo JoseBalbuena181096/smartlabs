@@ -1,5 +1,7 @@
 const mysql = require('mysql2/promise');
 const mqtt = require('mqtt');
+const dbConfig = require('../../config/database');
+const mqttConfig = require('../../config/mqtt');
 
 /**
  * Servidor IoT MQTT refactorizado para SMARTLABS
@@ -12,31 +14,18 @@ class IoTMQTTServer {
         this.serialLoanUser = null;
         this.countLoanCard = 0;
         
-        // Configuración de base de datos
-        this.dbConfig = {
-            host: "192.168.0.100",
-            user: "root",
-            password: "emqxpass",
-            database: "emqx",
-            port: 4000,
-            acquireTimeout: 60000,
-            timeout: 60000,
-            reconnect: true
-        };
+        // Configuración de base de datos desde archivo centralizado
+        this.dbConfig = dbConfig.primary;
+        this.fallbackDbConfig = dbConfig.fallback;
         
-        // Configuración MQTT
+        // Configuración MQTT desde archivo centralizado
         this.mqttOptions = {
-            port: 1883,
-            host: '192.168.0.100',
-            clientId: 'access_control_server_' + Math.round(Math.random() * 10000),
-            username: 'jose',
-            password: 'public',
-            keepalive: 60,
-            reconnectPeriod: 1000,
-            protocolId: 'MQIsdp',
-            protocolVersion: 3,
-            clean: true,
-            encoding: 'utf8'
+            ...mqttConfig.client,
+            clientId: mqttConfig.client.clientIdPrefix + Math.round(Math.random() * 10000),
+            host: mqttConfig.broker.host,
+            port: mqttConfig.broker.port,
+            username: mqttConfig.broker.username,
+            password: mqttConfig.broker.password
         };
     }
     
@@ -410,24 +399,5 @@ class IoTMQTTServer {
     }
 }
 
-// Inicializar y ejecutar el servidor
-const server = new IoTMQTTServer();
-
-// Manejo de señales para cierre limpio
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Recibida señal SIGINT, cerrando servidor...');
-    await server.shutdown();
-    process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-    console.log('\n🛑 Recibida señal SIGTERM, cerrando servidor...');
-    await server.shutdown();
-    process.exit(0);
-});
-
-// Iniciar el servidor
-server.init().catch((error) => {
-    console.error('❌ Error fatal:', error);
-    process.exit(1);
-});
+// Exportar la clase para uso en otros módulos
+module.exports = IoTMQTTServer;

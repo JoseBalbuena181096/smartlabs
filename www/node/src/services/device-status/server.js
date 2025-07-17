@@ -4,109 +4,81 @@
  * y envía actualizaciones en tiempo real a los clientes conectados
  */
 
+const mysql = require('mysql2/promise');
 const WebSocket = require('ws');
-const mysql = require('mysql2');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+// Importar configuraciones centralizadas
+const dbConfig = require('../../config/database');
+const deviceConfig = require('../../config/device-status');
 
 // Configuración del servidor WebSocket
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || deviceConfig.websocket.port;
 const server = http.createServer();
 const wss = new WebSocket.Server({ server });
 
-// Configuración de la base de datos
-const dbConfig = {
-    host: '192.168.0.100',
-    user: 'root',
-    password: 'emqxpass',
-    database: 'emqx',
-    port: 4000
-};
-
-// Fallback a base de datos local si la externa falla
-const localDbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'emqx'
-};
+// Usar configuraciones centralizadas
+const primaryDbConfig = dbConfig.primary;
+const fallbackDbConfig = dbConfig.fallback;
 
 // Estado global de los dispositivos
 const deviceStatus = {};
 const clients = new Map();
 let dbConnection = null;
 
-// Conectar a la base de datos
-function connectToDatabase() {
-    console.log('Intentando conectar a la base de datos externa...');
-    
-    // Intentar conectar a la base de datos externa
-    dbConnection = mysql.createConnection(dbConfig);
-    
-    dbConnection.connect((err) => {
-        if (err) {
-            console.error('Error conectando a la base de datos externa:', err.message);
-            console.log('Intentando conectar a la base de datos local...');
-            
-            // Si falla, intentar con la base de datos local
-            dbConnection = mysql.createConnection(localDbConfig);
-            
-            dbConnection.connect((err) => {
-                if (err) {
-                    console.error('Error conectando a la base de datos local:', err.message);
-                    console.log('Reintentando en 5 segundos...');
-                    setTimeout(connectToDatabase, 5000);
-                } else {
-                    console.log('Conectado a la base de datos local');
-                    startMonitoring();
-                }
-            });
-        } else {
-            console.log('Conectado a la base de datos externa');
-            startMonitoring();
+// Función para conectar a la base de datos
+async function connectToDatabase() {
+    try {
+        // Intentar conexión principal
+        console.log('🔌 Intentando conectar a la base de datos principal...');
+        const connection = await mysql.createConnection(primaryDbConfig);
+        console.log('✅ Conectado a la base de datos principal');
+        return connection;
+    } catch (error) {
+        console.warn('⚠️ Error conectando a la base de datos principal:', error.message);
+        
+        try {
+            // Intentar conexión de fallback
+            console.log('🔌 Intentando conectar a la base de datos local...');
+            const connection = await mysql.createConnection(fallbackDbConfig);
+            console.log('✅ Conectado a la base de datos local (fallback)');
+            return connection;
+        } catch (fallbackError) {
+            console.error('❌ Error conectando a la base de datos local:', fallbackError.message);
+            throw new Error('No se pudo conectar a ninguna base de datos');
         }
-    });
-    
-    dbConnection.on('error', (err) => {
-        console.error('Error de base de datos:', err);
-        if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-            console.log('Reconectando a la base de datos...');
-            connectToDatabase();
-        } else {
-            throw err;
-        }
-    });
+    }
 }
 
 // Iniciar monitoreo de dispositivos
-function startMonitoring() {
-    console.log('Iniciando monitoreo de dispositivos...');
+async function startMonitoring() {
+    console.log('🔍 Iniciando monitoreo de dispositivos...');
     
     // Consultar estado inicial de todos los dispositivos
-    checkAllDevicesStatus();
+    await checkAllDevicesStatus();
     
-    // Configurar intervalos de verificación
-    setInterval(checkAllDevicesStatus, 5000); // Cada 5 segundos
+    // Configurar intervalos de verificación según configuración
+    setInterval(checkAllDevicesStatus, deviceConfig.monitoring.pollingInterval);
 }
 
 // Consultar estado de todos los dispositivos
-function checkAllDevicesStatus() {
-    const query = `
-        SELECT t.traffic_device, t.traffic_state, t.traffic_date, 
-               h.hab_name, h.hab_registration, h.hab_email
-        FROM traffic t
-        LEFT JOIN habintants h ON t.traffic_hab_id = h.hab_id
-        WHERE (t.traffic_device, t.traffic_date) IN (
-            SELECT traffic_device, MAX(traffic_date) 
-            FROM traffic 
-            GROUP BY traffic_device
-        )
-    `;
-    
-    dbConnection.query(query, (err, results) => {
-        if (err) {
-            console.error('Error consultando estado de dispositivos:', err);
-            return;
-        }
+async function checkAllDevicesStatus() {
+    try {
+        const query = `
+            SELECT t.traffic_device, t.traffic_state, t.traffic_date, 
+                   h.hab_name, h.hab_registration, h.hab_email
+            FROM traffic t
+            LEFT JOIN habintants h ON t.traffic_hab_id = h.hab_id
+            WHERE (t.traffic_device, t.traffic_date) IN (
+                SELECT traffic_device, MAX(traffic_date) 
+                FROM traffic 
+                GROUP BY traffic_device
+            )
+        `;
+        
+        const [results] = await dbConnection.execute(query);
         
         // Actualizar estado global
         results.forEach(device => {
@@ -133,10 +105,19 @@ function checkAllDevicesStatus() {
                 // Notificar a los clientes interesados en este dispositivo
                 broadcastDeviceStatus(deviceId, currentState);
                 
-                console.log(`Dispositivo ${deviceId} actualizado: ${currentState.state} (${currentState.last_activity})`);
+                if (deviceConfig.logging.level === 'debug') {
+                    console.log(`📱 Dispositivo ${deviceId} actualizado: ${currentState.state} (${currentState.last_activity})`);
+                }
             }
         });
-    });
+        
+        if (deviceConfig.logging.level === 'debug') {
+            console.log(`📊 Estado actualizado: ${results.length} dispositivos monitoreados`);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error consultando estado de dispositivos:', error);
+    }
 }
 
 // Enviar estado a los clientes interesados
@@ -269,9 +250,15 @@ wss.on('connection', (ws) => {
 });
 
 // Iniciar servidor
-server.listen(PORT, () => {
-    console.log(`Servidor WebSocket iniciado en puerto ${PORT}`);
-    connectToDatabase();
+server.listen(PORT, async () => {
+    console.log(`🚀 Servidor WebSocket iniciado en puerto ${PORT}`);
+    try {
+        dbConnection = await connectToDatabase();
+        await startMonitoring();
+    } catch (error) {
+        console.error('❌ Error iniciando servidor:', error);
+        process.exit(1);
+    }
 });
 
 // Manejar señales de terminación

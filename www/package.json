@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "start": "node scripts/start-all.js",
+    "start:iot": "node scripts/start-iot-server.js",
+    "start:device-status": "node scripts/start-device-server.js",
+    "dev": "nodemon scripts/start-all.js",
+    "dev:iot": "nodemon scripts/start-iot-server.js",
+    "dev:device-status": "nodemon scripts/start-device-server.js"
+  }
+}
