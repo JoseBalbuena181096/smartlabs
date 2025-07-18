@@ -1,0 +1,34 @@
+{
+  "name": "smartlabs-flutter-api",
+  "version": "1.0.0",
+  "description": "API REST para aplicación Flutter de control de equipos SMARTLABS",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "iot",
+    "mqtt",
+    "flutter",
+    "smartlabs",
+    "api"
+  ],
+  "author": "SMARTLABS Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "joi": "^17.11.0",
+    "mqtt": "^5.3.4",
+    "mysql2": "^3.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
