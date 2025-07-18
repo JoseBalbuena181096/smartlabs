@@ -240,7 +240,7 @@ function generarCadenaAleatoria(longitud) {
 
 const cadenaAleatoria = generarCadenaAleatoria(6);
 
-var audio = new Audio('public/audio/audio.mp3');
+var audio = new Audio('/public/audio/audio.mp3');
 // Variable para almacenar el RFID actual
 var currentRfid = '';
 
@@ -258,6 +258,11 @@ function process_msg(topic, message){
   if (query == "loan_queryu") {
     // Almacenar el valor RFID para uso posterior
     currentRfid = msg;
+    
+    // Reproducir audio de notificación
+    audio.play().catch(function(error) {
+      console.log("Error al reproducir audio:", error);
+    });
     
     // Mostrar en display de nuevo acceso
     document.getElementById('display_new_access').innerHTML = 'Nuevo acceso: ' + msg;

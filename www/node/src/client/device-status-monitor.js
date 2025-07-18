@@ -279,4 +279,4 @@ window.DeviceStatusMonitor = {
     config: window.deviceStatusMonitor
 };
 
-console.log('🔧 device-status-monitor.js cargado completamente'); 
+console.log('🔧 device-status-monitor.js cargado completamente');
