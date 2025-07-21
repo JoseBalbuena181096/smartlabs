@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -43,7 +44,18 @@ class SmartLabsFlutterAPI {
         
         // CORS - Permitir acceso desde Flutter
         this.app.use(cors({
-            origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+            origin: [
+                'http://localhost:3000', 
+                'http://127.0.0.1:3000',
+                'http://localhost:3001',
+                'http://127.0.0.1:3001',
+                'http://localhost:8080',
+                'http://127.0.0.1:8080',
+                'http://localhost:5000',
+                'http://127.0.0.1:5000',
+                /^http:\/\/localhost:\d+$/,
+                /^http:\/\/127\.0\.0\.1:\d+$/
+            ],
             methods: ['GET', 'POST', 'PUT', 'DELETE'],
             allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
             credentials: true
@@ -285,3 +297,4 @@ if (require.main === module) {
 }
 
 module.exports = SmartLabsFlutterAPI;
+
