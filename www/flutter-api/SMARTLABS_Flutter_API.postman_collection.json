@@ -1,0 +1,441 @@
+{
+	"info": {
+		"_postman_id": "smartlabs-flutter-api-collection",
+		"name": "SMARTLABS Flutter API",
+		"description": "Colección completa de endpoints para la API REST de SMARTLABS Flutter",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "smartlabs-team"
+	},
+	"item": [
+		{
+			"name": "🏥 Health & Info",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Verifica el estado de la API"
+					},
+					"response": []
+				},
+				{
+					"name": "API Documentation",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api",
+							"host": ["{{base_url}}"],
+							"path": ["api"]
+						},
+						"description": "Obtiene información general y documentación de endpoints"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "👥 Users",
+			"item": [
+				{
+					"name": "Get User by Registration",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users/registration/{{registration}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "registration", "{{registration}}"]
+						},
+						"description": "Busca un usuario por su matrícula"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by RFID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users/rfid/{{rfid}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "rfid", "{{rfid}}"]
+						},
+						"description": "Busca un usuario por su RFID"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users/registration/{{registration}}/history?limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "registration", "{{registration}}", "history"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Obtiene el historial de acceso de un usuario"
+					},
+					"response": []
+				},
+				{
+					"name": "Validate User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/users/validate/{{registration}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "users", "validate", "{{registration}}"]
+						},
+						"description": "Valida si un usuario existe"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🔧 Devices",
+			"item": [
+				{
+					"name": "Control Device",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"registration\": \"{{registration}}\",\n  \"device_serie\": \"{{device_serie}}\",\n  \"action\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/devices/control",
+							"host": ["{{base_url}}"],
+							"path": ["api", "devices", "control"]
+						},
+						"description": "Controla un dispositivo (encender/apagar)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Devices",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/devices",
+							"host": ["{{base_url}}"],
+							"path": ["api", "devices"]
+						},
+						"description": "Lista todos los dispositivos disponibles"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Device Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/devices/{{device_serie}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "devices", "{{device_serie}}"]
+						},
+						"description": "Obtiene información de un dispositivo por su serie"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Device Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/devices/{{device_serie}}/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "devices", "{{device_serie}}", "status"]
+						},
+						"description": "Obtiene el estado actual de un dispositivo"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Device History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/devices/{{device_serie}}/history?limit=50",
+							"host": ["{{base_url}}"],
+							"path": ["api", "devices", "{{device_serie}}", "history"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						},
+						"description": "Obtiene el historial de uso de un dispositivo"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🎯 Préstamos",
+			"item": [
+				{
+					"name": "Control Préstamo (Replica Hardware)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"registration\": \"{{registration}}\",\n  \"device_serie\": \"{{device_serie}}\",\n  \"action\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/prestamo/control/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "prestamo", "control", ""]
+						},
+						"description": "Controla un dispositivo de préstamo. REPLICA COMPLETAMENTE el comportamiento del hardware main_usuariosLV2.cpp. Obtiene automáticamente el RFID del usuario y lo publica en el tópico MQTT {device_serie}/loan_queryu. Action: 1=encender, 0=apagar"
+					},
+					"response": []
+				},
+				{
+					"name": "Préstamo de Equipo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_serie\": \"{{device_serie}}\",\n  \"equip_rfid\": \"{{equip_rfid}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/prestamo/equipo/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "prestamo", "equipo", ""]
+						},
+						"description": "Procesa préstamo de equipo"
+					},
+					"response": []
+				},
+				{
+					"name": "Simular Dispositivo Físico",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"registration\": \"{{registration}}\",\n  \"device_serie\": \"{{device_serie}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/prestamo/simular/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "prestamo", "simular", ""]
+						},
+						"description": "Simula el dispositivo físico RFID"
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener Estado de Sesión",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/prestamo/estado/",
+							"host": ["{{base_url}}"],
+							"path": ["api", "prestamo", "estado", ""]
+						},
+						"description": "Obtiene el estado actual de la sesión de préstamo"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "🔒 Internal",
+			"item": [
+				{
+					"name": "Notificar Sesión de Préstamo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"device_serie\": \"{{device_serie}}\",\n  \"user_rfid\": \"{{rfid}}\",\n  \"action\": \"on\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/internal/loan-session",
+							"host": ["{{base_url}}"],
+							"path": ["api", "internal", "loan-session"]
+						},
+						"description": "Endpoint interno para notificar sesiones de préstamo"
+					},
+					"response": []
+				},
+				{
+					"name": "Estado del Sistema Interno",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/internal/status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "internal", "status"]
+						},
+						"description": "Estado del sistema interno"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Script de pre-request para logging",
+					"console.log('Ejecutando request a:', pm.request.url.toString());"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Tests básicos para todas las requests",
+					"pm.test('Status code is not 500', function () {",
+					"    pm.expect(pm.response.code).to.not.equal(500);",
+					"});",
+					"",
+					"pm.test('Response has success field', function () {",
+					"    const jsonData = pm.response.json();",
+					"    pm.expect(jsonData).to.have.property('success');",
+					"});",
+					"",
+					"pm.test('Response time is less than 5000ms', function () {",
+					"    pm.expect(pm.response.responseTime).to.be.below(5000);",
+					"});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3001",
+			"type": "string"
+		},
+		{
+			"key": "registration",
+			"value": "A01234567",
+			"type": "string"
+		},
+		{
+			"key": "device_serie",
+			"value": "DEV001",
+			"type": "string"
+		},
+		{
+			"key": "rfid",
+			"value": "1234567890",
+			"type": "string"
+		},
+		{
+			"key": "equip_rfid",
+			"value": "EQ123456789",
+			"type": "string"
+		}
+	]
+}
