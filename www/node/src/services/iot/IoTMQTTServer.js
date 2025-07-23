@@ -259,6 +259,7 @@ class IoTMQTTServer {
     
     /**
      * Maneja consultas de usuario para préstamos
+     * Sincronizado con el API de Flutter para evitar duplicación
      */
     async handleLoanUserQuery(serialNumber, rfidNumber) {
         try {
@@ -269,15 +270,17 @@ class IoTMQTTServer {
             
             if (cards.length === 1) {
                 if (this.countLoanCard === 1) {
+                    // Solo enviar unload una vez
                     this.mqttClient.publish(`${serialNumber}/command`, 'unload');
                     this.countLoanCard = 0;
                     this.serialLoanUser = null;
                     console.log('🔄 Sesión de préstamo reiniciada');
                 } else {
+                    // Solo enviar found una vez
                     this.mqttClient.publish(`${serialNumber}/user_name`, cards[0].hab_name);
                     this.mqttClient.publish(`${serialNumber}/command`, 'found');
                     this.serialLoanUser = cards;
-                    this.countLoanCard += 1;
+                    this.countLoanCard = 1; // Cambio: asignar 1 directamente en lugar de incrementar
                     console.log(`✅ Usuario encontrado para préstamo: ${cards[0].hab_name}`);
                 }
             } else {

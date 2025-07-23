@@ -361,8 +361,7 @@ class PrestamoService {
                          }
                      };
                  } else {
-                     // Nuevo login de usuario
-                     await this.enviarComandosMQTT(deviceSerie, user.hab_name, 'found');
+                     // Nuevo login de usuario - el servidor IoT enviará 'found'
                      this.serialLoanUser = [user];
                      this.countLoanCard = 1;
                      console.log(`✅ Usuario encontrado para préstamo: ${user.hab_name}`);
@@ -378,7 +377,7 @@ class PrestamoService {
                      };
                  }
              } else {
-                 await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
+                 // El servidor IoT enviará 'nofound' automáticamente
                  console.log('❌ Usuario no encontrado para préstamo');
                  
                  return {
@@ -493,7 +492,7 @@ class PrestamoService {
             const usuario = await this.getUserByRFID(rfidNumber);
             if (!usuario) {
                 console.log(`❌ Usuario no encontrado para RFID: ${rfidNumber}`);
-                await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
+                // El servidor IoT enviará 'nofound' automáticamente
                 return {
                     success: false,
                     message: 'Usuario no encontrado para RFID',
@@ -506,7 +505,6 @@ class PrestamoService {
             
         } catch (error) {
             console.error('❌ Error procesando consulta RFID:', error);
-            await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
             return {
                 success: false,
                 message: 'Error interno del servidor',
@@ -531,7 +529,7 @@ class PrestamoService {
             const usuario = await this.getUserByRegistration(registration);
             if (!usuario) {
                 console.log(`❌ Usuario no encontrado: ${registration}`);
-                await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
+                // El servidor IoT enviará 'nofound' automáticamente cuando procese el RFID
                 return {
                     success: false,
                     message: 'Usuario no encontrado',
@@ -543,7 +541,6 @@ class PrestamoService {
             const dispositivo = await this.getDeviceBySerie(deviceSerie);
             if (!dispositivo) {
                 console.log(`❌ Dispositivo no encontrado: ${deviceSerie}`);
-                await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
                 return {
                     success: false,
                     message: 'Dispositivo no encontrado',
@@ -598,11 +595,8 @@ class PrestamoService {
 
             if (action === 'on') {
                 // Acción de login/autenticación de usuario - REPLICA EXACTA DEL HARDWARE ESP32
-                // En el hardware, cuando se coloca la tarjeta siempre ejecuta 'found' y mantiene sesión activa
-                // Solo se ejecuta 'unload' cuando se envía explícitamente action:0
-                
-                // Siempre ejecutar 'found' cuando action es 'on' (como el hardware)
-                await this.enviarComandosMQTT(deviceSerie, usuario.hab_name, 'found');
+                // El servidor IoT de Node.js procesará el RFID publicado en loan_queryu y enviará los comandos
+                // No enviamos comandos duplicados desde aquí
                 
                 this.serialLoanUser = [usuario];
                 this.countLoanCard = 1;
@@ -614,15 +608,14 @@ class PrestamoService {
                     data: {
                         usuario: usuario.hab_name,
                         dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
-                        estado: 'active', // Cambio: siempre 'active' cuando action:1
-                        rfid_published: userRFID // ✅ Información adicional
+                        estado: 'active',
+                        rfid_published: userRFID
                     }
                 };
             } else {
                 // Acción de logout/finalizar sesión
+                // El servidor IoT de Node.js procesará el RFID y enviará 'unload' automáticamente
                 if (this.countLoanCard === 1) {
-                    await this.enviarComandosMQTT(deviceSerie, null, 'unload');
-                    
                     this.countLoanCard = 0;
                     this.serialLoanUser = null;
                     
@@ -633,12 +626,10 @@ class PrestamoService {
                             usuario: usuario.hab_name,
                             dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
                             estado: 'sesión finalizada',
-                            rfid_published: userRFID // ✅ Información adicional
+                            rfid_published: userRFID
                         }
                     };
                 } else {
-                    // No hay sesión activa, pero permitir la operación como válida
-                    // Esto evita errores cuando se intenta finalizar una sesión que ya está cerrada
                     console.log(`⚠️ Intento de finalizar sesión sin sesión activa para usuario: ${usuario.hab_name}`);
                     
                     return {
@@ -648,7 +639,7 @@ class PrestamoService {
                             usuario: usuario.hab_name,
                             dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
                             estado: 'sin sesión activa',
-                            rfid_published: userRFID // ✅ Información adicional
+                            rfid_published: userRFID
                         }
                     };
                 }
@@ -682,7 +673,7 @@ class PrestamoService {
             const usuario = await this.getUserByRegistration(registration);
             if (!usuario) {
                 console.log(`❌ Usuario no encontrado por matrícula: ${registration}`);
-                await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
+                // El servidor IoT enviará 'nofound' automáticamente cuando procese el RFID
                 return {
                     success: false,
                     message: 'Usuario no encontrado',
@@ -716,7 +707,7 @@ class PrestamoService {
                 
                 if (rows.length === 0) {
                     console.log(`❌ No se encontró tarjeta RFID para la matrícula: ${registration}`);
-                    await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
+                    // El servidor IoT enviará 'nofound' automáticamente cuando no encuentre el RFID
                     return {
                         success: false,
                         message: 'Usuario no tiene tarjeta RFID asignada',
