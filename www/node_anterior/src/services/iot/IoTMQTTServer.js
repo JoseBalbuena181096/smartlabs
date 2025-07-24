@@ -259,15 +259,10 @@ class IoTMQTTServer {
     
     /**
      * Maneja consultas de usuario para préstamos
-     * DESHABILITADO: El API Flutter maneja directamente los comandos MQTT para evitar duplicación
+     * Sincronizado con el API de Flutter para evitar duplicación
      */
     async handleLoanUserQuery(serialNumber, rfidNumber) {
         try {
-            // ✅ SOLO LOGGING - No enviar comandos MQTT para evitar duplicación con API Flutter
-            console.log(`🔍 [Node.js] Consulta de préstamo recibida: ${serialNumber} - RFID: ${rfidNumber}`);
-            console.log(`📝 [Node.js] Procesamiento delegado al API Flutter para evitar duplicación`);
-            
-            // Mantener sincronización del estado interno para consultas de equipos
             const [cards] = await this.dbConnection.execute(
                 'SELECT * FROM cards_habs WHERE cards_number = ?',
                 [rfidNumber]
@@ -275,19 +270,26 @@ class IoTMQTTServer {
             
             if (cards.length === 1) {
                 if (this.countLoanCard === 1) {
+                    // Solo enviar unload una vez
+                    this.mqttClient.publish(`${serialNumber}/command`, 'unload');
                     this.countLoanCard = 0;
                     this.serialLoanUser = null;
-                    console.log('🔄 [Node.js] Estado interno: Sesión finalizada');
+                    console.log('🔄 Sesión de préstamo reiniciada');
                 } else {
+                    // Solo enviar found una vez
+                    this.mqttClient.publish(`${serialNumber}/user_name`, cards[0].hab_name);
+                    this.mqttClient.publish(`${serialNumber}/command`, 'found');
                     this.serialLoanUser = cards;
-                    this.countLoanCard = 1;
-                    console.log(`✅ [Node.js] Estado interno: Usuario ${cards[0].hab_name} logueado`);
+                    this.countLoanCard = 1; // Cambio: asignar 1 directamente en lugar de incrementar
+                    console.log(`✅ Usuario encontrado para préstamo: ${cards[0].hab_name}`);
                 }
             } else {
-                console.log('❌ [Node.js] Estado interno: Usuario no encontrado');
+                this.mqttClient.publish(`${serialNumber}/command`, 'nofound');
+                console.log('❌ Usuario no encontrado para préstamo');
             }
         } catch (error) {
             console.error('❌ Error en consulta de usuario para préstamo:', error);
+            this.mqttClient.publish(`${serialNumber}/command`, 'error');
         }
     }
     

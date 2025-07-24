@@ -1,5 +1,6 @@
 const mysql = require('mysql2/promise');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 /**
  * Configuración de base de datos para SMARTLABS Flutter API
@@ -7,28 +8,31 @@ require('dotenv').config();
 class DatabaseConfig {
     constructor() {
         this.primaryConfig = {
-            host: process.env.DB_HOST,
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-            database: process.env.DB_NAME,
-            port: process.env.DB_PORT,
+            host: process.env.DB_HOST || '192.168.0.100',
+            user: process.env.DB_USER || 'emqxuser',
+            password: process.env.DB_PASSWORD || 'emqxpass',
+            database: process.env.DB_NAME || 'emqx',
+            port: parseInt(process.env.DB_PORT) || 4000,
             charset: 'utf8mb4',
             connectTimeout: 60000,
-            acquireTimeout: 60000,
-            timeout: 60000
+            acquireTimeout: 60000
         };
 
         this.fallbackConfig = {
-            host: process.env.DB_LOCAL_HOST,
-            user: process.env.DB_LOCAL_USER,
-            password: process.env.DB_LOCAL_PASSWORD,
-            database: process.env.DB_LOCAL_NAME,
-            port: process.env.DB_LOCAL_PORT,
+            host: process.env.DB_LOCAL_HOST || 'localhost',
+            user: process.env.DB_LOCAL_USER || 'emqxuser',
+            password: process.env.DB_LOCAL_PASSWORD || 'emqxpass',
+            database: process.env.DB_LOCAL_NAME || 'emqx',
+            port: parseInt(process.env.DB_LOCAL_PORT) || 4000,
             charset: 'utf8mb4',
             connectTimeout: 30000,
-            acquireTimeout: 30000,
-            timeout: 30000
+            acquireTimeout: 30000
         };
+        
+        console.log('🔧 Configuración de BD:', {
+            primary: `${this.primaryConfig.user}@${this.primaryConfig.host}:${this.primaryConfig.port}/${this.primaryConfig.database}`,
+            fallback: `${this.fallbackConfig.user}@${this.fallbackConfig.host}:${this.fallbackConfig.port}/${this.fallbackConfig.database}`
+        });
 
         this.connection = null;
     }

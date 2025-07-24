@@ -583,6 +583,7 @@ class PrestamoService {
             }
             
             // ✅ REPLICAR COMPORTAMIENTO DEL HARDWARE: Publicar RFID al tópico loan_queryu
+            // SOLO para logging, no para procesamiento automático
             if (userRFID && this.mqttClient && this.mqttClient.connected) {
                 try {
                     const topic = `${deviceSerie}/loan_queryu`;
@@ -594,12 +595,15 @@ class PrestamoService {
             }
 
             if (action === 'on') {
-                // Acción de login/autenticación de usuario - REPLICA EXACTA DEL HARDWARE ESP32
-                // El servidor IoT de Node.js procesará el RFID publicado en loan_queryu y enviará los comandos
-                // No enviamos comandos duplicados desde aquí
+                // Acción de login/autenticación de usuario
+                // Enviar comandos MQTT directamente desde aquí para evitar duplicación
                 
                 this.serialLoanUser = [usuario];
                 this.countLoanCard = 1;
+                
+                // Enviar comandos MQTT directamente
+                await this.enviarComandosMQTT(deviceSerie, usuario.hab_name, 'found');
+                
                 console.log(`✅ Usuario encontrado para préstamo: ${usuario.hab_name} - Sesión ACTIVA`);
                 
                 return {
@@ -614,10 +618,14 @@ class PrestamoService {
                 };
             } else {
                 // Acción de logout/finalizar sesión
-                // El servidor IoT de Node.js procesará el RFID y enviará 'unload' automáticamente
+                // Enviar comando unload directamente desde aquí
                 if (this.countLoanCard === 1) {
                     this.countLoanCard = 0;
                     this.serialLoanUser = null;
+                    
+                    // Enviar comando unload directamente
+                    await this.enviarComandosMQTT(deviceSerie, null, 'unload');
+                    console.log('🔄 Sesión de préstamo reiniciada');
                     
                     return {
                         success: true,

@@ -10,7 +10,7 @@ const dbConfig = require('./config/database');
 const mqttConfig = require('./config/mqtt');
 
 // Importar servicios
-// const mqttListenerService = require('./services/mqttListenerService'); // ELIMINADO - Listener MQTT removido
+const mqttListenerService = require('./services/mqttListenerService'); // REINTEGRADO - Listener MQTT para hardware
 
 // Importar rutas
 const userRoutes = require('./routes/userRoutes');
@@ -131,6 +131,10 @@ class SmartLabsFlutterAPI {
                         prestamo: {
                              'POST /api/prestamo/control/': 'Controla préstamo de dispositivo manualmente'
                          },
+                        mqtt: {
+                            'GET /api/mqtt/status': 'Estado del MQTT Listener para hardware',
+                            'POST /api/mqtt/control': 'Controla MQTT Listener (body: {action: "start"|"stop"})'
+                        },
                         internal: {
                             'POST /api/internal/loan-session': 'Notifica sesión de préstamo (interno)',
                             'GET /api/internal/status': 'Estado del sistema interno'
@@ -144,7 +148,68 @@ class SmartLabsFlutterAPI {
         this.app.use('/api/users', optionalAuth, userRoutes);
         this.app.use('/api/devices', optionalAuth, deviceRoutes);
         this.app.use('/api/prestamo', optionalAuth, prestamoRoutes);
-        // this.app.use('/api/mqtt', optionalAuth, mqttRoutes); // ELIMINADO - Rutas MQTT removidas
+        
+        // Rutas MQTT para control del listener de hardware
+        this.app.get('/api/mqtt/status', optionalAuth, (req, res) => {
+            try {
+                const isActive = mqttListenerService.isActive();
+                const sessionState = mqttListenerService.getSessionState();
+                
+                res.json({
+                    success: true,
+                    data: {
+                        mqtt_listener: {
+                            active: isActive,
+                            session: sessionState
+                        }
+                    }
+                });
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    message: 'Error obteniendo estado del MQTT Listener',
+                    error: error.message
+                });
+            }
+        });
+        
+        this.app.post('/api/mqtt/control', optionalAuth, async (req, res) => {
+            try {
+                const { action } = req.body;
+                
+                if (action === 'start') {
+                    const started = await mqttListenerService.startListening();
+                    res.json({
+                        success: started,
+                        message: started ? 'MQTT Listener iniciado correctamente' : 'Error iniciando MQTT Listener',
+                        data: {
+                            active: started
+                        }
+                    });
+                } else if (action === 'stop') {
+                    await mqttListenerService.stopListening();
+                    res.json({
+                        success: true,
+                        message: 'MQTT Listener detenido correctamente',
+                        data: {
+                            active: false
+                        }
+                    });
+                } else {
+                    res.status(400).json({
+                        success: false,
+                        message: 'Acción no válida. Use "start" o "stop"'
+                    });
+                }
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    message: 'Error controlando MQTT Listener',
+                    error: error.message
+                });
+            }
+        });
+        
         this.app.use('/api/internal', internalRoutes); // Sin autenticación para comunicación interna
         
         // Intentar conectar con el servidor IoT Node.js para sincronización
@@ -183,13 +248,13 @@ class SmartLabsFlutterAPI {
             // Conectar a MQTT
             await mqttConfig.connect();
             
-            // ELIMINADO - Listener MQTT para consultas RFID del hardware removido
-            // const listenerStarted = await mqttListenerService.startListening();
-            // if (listenerStarted) {
-            //     console.log('🎧 Listener MQTT para consultas RFID iniciado correctamente');
-            // } else {
-            //     console.warn('⚠️ No se pudo iniciar el listener MQTT para consultas RFID');
-            // }
+            // REINTEGRADO - Listener MQTT para consultas RFID del hardware
+            const listenerStarted = await mqttListenerService.startListening();
+            if (listenerStarted) {
+                console.log('🎧 Listener MQTT para consultas RFID iniciado correctamente');
+            } else {
+                console.warn('⚠️ No se pudo iniciar el listener MQTT para consultas RFID');
+            }
             
             console.log('✅ Todas las conexiones inicializadas correctamente');
         } catch (error) {
@@ -223,6 +288,10 @@ class SmartLabsFlutterAPI {
                 console.log(`   - POST http://localhost:${this.port}/api/prestamo/control/`);
                 console.log(`   - GET  http://localhost:${this.port}/api/users/registration/:registration`);
                 console.log(`   - GET  http://localhost:${this.port}/api/devices/:device_serie/status`);
+                console.log('🎧 MQTT Listener para hardware:');
+                console.log(`   - GET  http://localhost:${this.port}/api/mqtt/status`);
+                console.log(`   - POST http://localhost:${this.port}/api/mqtt/control`);
+                console.log('📡 Respondiendo automáticamente a peticiones MQTT del hardware main_usuariosLV2.cpp');
             });
             
             this.isRunning = true;
@@ -247,6 +316,9 @@ class SmartLabsFlutterAPI {
             // Cerrar conexiones
             await dbConfig.close();
             await mqttConfig.close();
+            
+            // Detener MQTT Listener
+            await mqttListenerService.stopListening();
             
             this.isRunning = false;
             console.log('✅ Servidor detenido correctamente');
