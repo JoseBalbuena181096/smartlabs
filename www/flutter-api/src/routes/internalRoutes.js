@@ -1,18 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-// Importar el servidor IoT para acceder al estado de sesiones
-let iotServerInstance = null;
-
-// Función para establecer la instancia del servidor IoT
-function setIoTServerInstance(instance) {
-    iotServerInstance = instance;
-}
-
-// Función para obtener la instancia del servidor IoT
-function getIoTServerInstance() {
-    return iotServerInstance;
-}
+// Estado de sesiones simplificado (sin dependencia del servidor IoT)
+let currentSession = null;
 
 /**
  * @route POST /api/internal/loan-session
@@ -46,39 +36,24 @@ router.post('/loan-session', async (req, res) => {
         console.log(`   👤 Usuario RFID: ${user_rfid}`);
         console.log(`   🎯 Acción: ${action}`);
         
-        // Acceder al servidor IoT para sincronizar el estado de sesión
-        const iotServer = getIoTServerInstance();
-        
-        if (!iotServer) {
-            console.warn('⚠️ [INTERNAL] Servidor IoT no disponible, solo registrando operación');
-        } else {
-            // Sincronizar el estado con el servidor IoT
-            if (action === 'on') {
-                // Simular inicio de sesión
-                if (iotServer.countLoanCard === 0) {
-                    // Obtener información del usuario para establecer la sesión
-                    try {
-                        const [cards] = await iotServer.dbConnection.execute(
-                            'SELECT * FROM cards_habs WHERE cards_number = ?',
-                            [user_rfid]
-                        );
-                        
-                        if (cards.length === 1) {
-                            iotServer.serialLoanUser = cards;
-                            iotServer.countLoanCard = 1;
-                            console.log(`✅ [INTERNAL] Sesión iniciada en backend Node.js para: ${cards[0].hab_name}`);
-                        }
-                    } catch (dbError) {
-                        console.error('❌ [INTERNAL] Error consultando usuario:', dbError);
-                    }
-                } else {
-                    console.log('⚠️ [INTERNAL] Ya hay una sesión activa en backend Node.js');
-                }
+        // Manejar estado de sesión simplificado
+        if (action === 'on') {
+            if (!currentSession) {
+                currentSession = {
+                    device_serie,
+                    user_rfid,
+                    started_at: new Date().toISOString()
+                };
+                console.log(`✅ [INTERNAL] Sesión iniciada para dispositivo: ${device_serie}`);
             } else {
-                // Simular cierre de sesión
-                iotServer.countLoanCard = 0;
-                iotServer.serialLoanUser = null;
-                console.log('✅ [INTERNAL] Sesión finalizada en backend Node.js');
+                console.log('⚠️ [INTERNAL] Ya hay una sesión activa');
+            }
+        } else {
+            if (currentSession) {
+                currentSession = null;
+                console.log('✅ [INTERNAL] Sesión finalizada');
+            } else {
+                console.log('⚠️ [INTERNAL] No hay sesión activa para finalizar');
             }
         }
         
@@ -88,7 +63,7 @@ router.post('/loan-session', async (req, res) => {
             action,
             timestamp: new Date().toISOString(),
             source: 'flutter-api',
-            backend_synced: iotServer ? true : false
+            current_session: currentSession
         };
         
         console.log(`✅ [INTERNAL] Sesión ${action === 'on' ? 'iniciada' : 'finalizada'} correctamente`);
@@ -127,7 +102,5 @@ router.get('/status', (req, res) => {
 });
 
 module.exports = {
-    router,
-    setIoTServerInstance,
-    getIoTServerInstance
+    router
 };

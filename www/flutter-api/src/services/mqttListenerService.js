@@ -11,6 +11,7 @@ class MQTTListenerService {
     constructor() {
         this.mqttClient = null;
         this.isListening = false;
+        // 🔄 SINCRONIZACIÓN: Estado local mantenido sincronizado con prestamoService
         this.serialLoanUser = null;
         this.countLoanCard = 0;
         
@@ -164,6 +165,7 @@ class MQTTListenerService {
     /**
      * Maneja consultas de usuario para préstamos (loan_queryu)
      * Replica exactamente la funcionalidad del servidor IoT Node.js anterior
+     * SINCRONIZADO con prestamoService para mantener estado consistente
      * @param {string} serialNumber - Número de serie del dispositivo
      * @param {string} rfidNumber - Número RFID del usuario
      */
@@ -171,27 +173,25 @@ class MQTTListenerService {
         try {
             console.log(`🔍 [Loan User Query] Dispositivo: ${serialNumber}, RFID: ${rfidNumber}`);
             
-            // Usar el servicio de préstamos para obtener usuario por RFID
-            const user = await prestamoService.getUserByRFID(rfidNumber);
+            // 🚫 FILTRO: Ignorar mensajes que vienen de la app (con prefijo "APP:")
+            if (rfidNumber.startsWith('APP:')) {
+                console.log(`ℹ️ [MQTT Listener] Mensaje ignorado - viene de la app: ${rfidNumber}`);
+                return;
+            }
             
-            if (user) {
-                if (this.countLoanCard === 1) {
-                    // Usuario ya logueado, cerrar sesión
-                    await this.publishMQTTCommand(serialNumber, null, 'unload');
-                    this.countLoanCard = 0;
-                    this.serialLoanUser = null;
-                    console.log('🔄 Sesión de préstamo finalizada');
-                } else {
-                    // Nuevo login de usuario
-                    await this.publishMQTTCommand(serialNumber, user.hab_name, 'found');
-                    this.serialLoanUser = [user];
-                    this.countLoanCard = 1;
-                    console.log(`✅ Usuario encontrado para préstamo: ${user.hab_name}`);
-                }
+            // 🔄 SINCRONIZACIÓN: Usar el método del prestamoService que maneja el estado centralizado
+            const result = await prestamoService.handleLoanUserQuery(serialNumber, rfidNumber);
+            
+            if (result.success) {
+                // 🔄 SINCRONIZACIÓN: Actualizar estado local con el estado del prestamoService
+                const sessionState = prestamoService.getSessionState();
+                this.countLoanCard = sessionState.count;
+                this.serialLoanUser = sessionState.active ? [{ hab_name: sessionState.user }] : null;
+                
+                console.log(`✅ [MQTT Listener] Estado sincronizado: countLoanCard=${this.countLoanCard}, usuario=${sessionState.user}`);
+                console.log(`✅ ${result.message}`);
             } else {
-                // Usuario no encontrado
-                await this.publishMQTTCommand(serialNumber, null, 'nofound');
-                console.log('❌ Usuario no encontrado para préstamo');
+                console.log(`❌ ${result.message}`);
             }
         } catch (error) {
             console.error('❌ Error en consulta de usuario para préstamo:', error);
@@ -202,6 +202,7 @@ class MQTTListenerService {
     /**
      * Maneja consultas de equipo para préstamos (loan_querye)
      * Replica exactamente la funcionalidad del servidor IoT Node.js anterior
+     * SINCRONIZADO con prestamoService para mantener estado consistente
      * @param {string} serialNumber - Número de serie del dispositivo
      * @param {string} rfidNumber - Número RFID del equipo
      */
@@ -209,9 +210,11 @@ class MQTTListenerService {
         try {
             console.log(`🔍 [Loan Equipment Query] Dispositivo: ${serialNumber}, RFID Equipo: ${rfidNumber}`);
             
-            if (this.countLoanCard === 0 || this.serialLoanUser === null) {
+            // 🔄 SINCRONIZACIÓN: Verificar estado desde prestamoService
+            const sessionState = prestamoService.getSessionState();
+            if (!sessionState.active) {
                 await this.publishMQTTCommand(serialNumber, null, 'nologin');
-                console.log('⚠️ No hay usuario logueado para préstamo');
+                console.log('⚠️ No hay usuario logueado para préstamo (verificado desde prestamoService)');
                 return;
             }
             
@@ -490,14 +493,18 @@ class MQTTListenerService {
 
     /**
      * Obtiene el estado actual de la sesión de préstamo
+     * SINCRONIZADO con prestamoService para mantener estado consistente
      * @returns {Object} - Estado de la sesión
      */
     getSessionState() {
-        return {
-            active: this.countLoanCard === 1,
-            user: this.serialLoanUser ? this.serialLoanUser[0].hab_name : null,
-            count: this.countLoanCard
-        };
+        // 🔄 SINCRONIZACIÓN: Devolver estado desde prestamoService
+        const sessionState = prestamoService.getSessionState();
+        
+        // Actualizar estado local para mantener sincronización
+        this.countLoanCard = sessionState.count;
+        this.serialLoanUser = sessionState.active ? [{ hab_name: sessionState.user }] : null;
+        
+        return sessionState;
     }
 }
 

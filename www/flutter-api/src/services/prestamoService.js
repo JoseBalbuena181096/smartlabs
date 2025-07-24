@@ -582,13 +582,14 @@ class PrestamoService {
                 }
             }
             
-            // ✅ REPLICAR COMPORTAMIENTO DEL HARDWARE: Publicar RFID al tópico loan_queryu
-            // SOLO para logging, no para procesamiento automático
+            // ✅ RESTAURADO: Publicar RFID al tópico loan_queryu con prefijo para evitar bucle infinito
+            // Usar prefijo "APP:" para distinguir publicaciones desde la app vs. hardware
             if (userRFID && this.mqttClient && this.mqttClient.connected) {
                 try {
                     const topic = `${deviceSerie}/loan_queryu`;
-                    this.mqttClient.publish(topic, userRFID);
-                    console.log(`📤 RFID publicado en ${topic}: ${userRFID} (replicando main_usuariosLV2.cpp)`);
+                    const messageWithPrefix = `APP:${userRFID}`;
+                    this.mqttClient.publish(topic, messageWithPrefix);
+                    console.log(`📤 RFID publicado en ${topic}: ${messageWithPrefix} (desde app, no procesará automáticamente)`);
                 } catch (error) {
                     console.error('❌ Error publicando RFID en loan_queryu:', error);
                 }

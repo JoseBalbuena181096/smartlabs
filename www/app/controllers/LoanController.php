@@ -20,6 +20,9 @@ class LoanController extends Controller {
         if ($_POST && isset($_POST['consult_loan'])) {
             $consult_loan = strip_tags($_POST['consult_loan']);
             
+            // Sanear el RFID eliminando prefijo "APP:" si existe
+            $consult_loan = $this->sanitizeRfid($consult_loan);
+            
             if (!empty($consult_loan)) {
                 echo $this->consultarPrestamos($consult_loan);
                 exit(); // Terminar ejecución para AJAX
@@ -31,6 +34,16 @@ class LoanController extends Controller {
         $this->view('loan/index', [
             'loans' => $activeLoans
         ]);
+    }
+    
+    /**
+     * Función saneadora para eliminar prefijo "APP:" del RFID
+     */
+    private function sanitizeRfid($rfidInput) {
+        if (is_string($rfidInput) && strpos($rfidInput, 'APP:') === 0) {
+            return substr($rfidInput, 4); // Eliminar los primeros 4 caracteres "APP:"
+        }
+        return $rfidInput;
     }
     
     /**
@@ -317,4 +330,4 @@ class LoanController extends Controller {
         $this->loanModel->delete($id);
         $this->redirect('Loan/history');
     }
-} 
+}

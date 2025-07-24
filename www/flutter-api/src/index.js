@@ -17,7 +17,7 @@ const userRoutes = require('./routes/userRoutes');
 const deviceRoutes = require('./routes/deviceRoutes');
 const prestamoRoutes = require('./routes/prestamoRoutes');
 // const mqttRoutes = require('./routes/mqttRoutes'); // ELIMINADO - Rutas MQTT removidas
-const { router: internalRoutes, setIoTServerInstance } = require('./routes/internalRoutes');
+const { router: internalRoutes } = require('./routes/internalRoutes');
 
 // Importar middleware
 const { optionalAuth } = require('./middleware/auth');
@@ -211,22 +211,6 @@ class SmartLabsFlutterAPI {
         });
         
         this.app.use('/api/internal', internalRoutes); // Sin autenticación para comunicación interna
-        
-        // Intentar conectar con el servidor IoT Node.js para sincronización
-        try {
-            const IoTMQTTServer = require('../../node/src/services/iot/IoTMQTTServer');
-            const iotServer = new IoTMQTTServer();
-            iotServer.init().then(() => {
-                setIoTServerInstance(iotServer);
-                console.log('✅ Conexión con servidor IoT Node.js establecida');
-            }).catch(error => {
-                console.warn('⚠️ No se pudo conectar con servidor IoT Node.js:', error.message);
-                console.warn('   Las notificaciones internas funcionarán sin sincronización de estado');
-            });
-        } catch (error) {
-            console.warn('⚠️ Servidor IoT Node.js no disponible:', error.message);
-            console.warn('   Las notificaciones internas funcionarán sin sincronización de estado');
-        }
         
         // Middleware de rutas no encontradas
         this.app.use(notFoundHandler);

@@ -285,6 +285,9 @@ class HabitantController extends Controller {
         if ($_POST && isset($_POST['search_rfid'])) {
             $rfid = isset($_POST['rfid']) ? $this->sanitize($_POST['rfid']) : '';
             
+            // Sanear el RFID eliminando prefijo "APP:" si existe
+            $rfid = $this->sanitizeRfid($rfid);
+            
             $results = [];
             
             if (!empty($rfid)) {
@@ -324,4 +327,14 @@ class HabitantController extends Controller {
         // Redirect si no es petición AJAX
         $this->redirect('Habitant');
     }
-} 
+    
+    /**
+     * Función saneadora para eliminar prefijo "APP:" del RFID
+     */
+    private function sanitizeRfid($rfidInput) {
+        if (is_string($rfidInput) && strpos($rfidInput, 'APP:') === 0) {
+            return substr($rfidInput, 4); // Eliminar los primeros 4 caracteres "APP:"
+        }
+        return $rfidInput;
+    }
+}

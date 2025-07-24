@@ -256,8 +256,11 @@ function process_msg(topic, message){
   var query = splitted_topic[1];
 
   if (query == "loan_queryu") {
-    // Almacenar el valor RFID para uso posterior
-    currentRfid = msg;
+    // Sanear el RFID eliminando prefijo "APP:" si existe
+    var sanitizedRfid = sanitizeRfid(msg);
+    
+    // Almacenar el valor RFID saneado para uso posterior
+    currentRfid = sanitizedRfid;
     
     // Reproducir audio de notificación
     audio.play().catch(function(error) {
@@ -265,16 +268,16 @@ function process_msg(topic, message){
     });
     
     // Mostrar en display de nuevo acceso
-    document.getElementById('display_new_access').innerHTML = 'Nuevo acceso: ' + msg;
+    document.getElementById('display_new_access').innerHTML = 'Nuevo acceso: ' + sanitizedRfid;
     
-    // Establecer el valor en el campo de entrada
-    document.getElementById('registration').value = msg;
+    // Establecer el valor saneado en el campo de entrada
+    document.getElementById('registration').value = sanitizedRfid;
     
-    // Realizar la consulta automáticamente
+    // Realizar la consulta automáticamente con el RFID saneado
     $.ajax({
       url: '/Loan/index',
       method: 'POST',
-      data: { consult_loan: msg },
+      data: { consult_loan: sanitizedRfid },
       success: function(data) {
         $('#resultado_').html(""); 
         var data_ = cortarDespuesDeDoctype(data);
@@ -422,6 +425,14 @@ function cortarDespuesDeDoctype(inputString) {
     return inputString.substring(0, doctypeIndex + doctype.length);
 }
 
+// Función saneadora para eliminar prefijo "APP:" del RFID
+function sanitizeRfid(rfidInput) {
+    if (typeof rfidInput === 'string' && rfidInput.startsWith('APP:')) {
+        return rfidInput.substring(4); // Eliminar los primeros 4 caracteres "APP:"
+    }
+    return rfidInput;
+}
+
 /*
 ******************************
 ****** INICIALIZACION ********
@@ -435,10 +446,19 @@ $(document).ready(function() {
     $('#registration').on('input', function() {
         var valorInput = $(this).val();
         
-        // Almacenar el valor actual como RFID
-        currentRfid = valorInput;
+        // Sanear el RFID eliminando prefijo "APP:" si existe
+        var sanitizedRfid = sanitizeRfid(valorInput);
         
-        // Enviar el valor al controlador mediante AJAX (auto-submit)
+        // Si el valor fue saneado, actualizar el campo
+        if (sanitizedRfid !== valorInput) {
+            $(this).val(sanitizedRfid);
+            valorInput = sanitizedRfid;
+        }
+        
+        // Almacenar el valor saneado como RFID
+        currentRfid = sanitizedRfid;
+        
+        // Enviar el valor saneado al controlador mediante AJAX (auto-submit)
         if (valorInput.length > 0) {
             $.ajax({
                 url: '/Loan/index', // Controlador que maneja la consulta

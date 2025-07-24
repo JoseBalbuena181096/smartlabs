@@ -21,6 +21,8 @@ class LoanAdminController extends Controller {
             // Búsqueda de usuarios
             if (isset($_POST['search_user'])) {
                 $query = strip_tags($_POST['search_user']);
+                // Sanear el query eliminando prefijo "APP:" si existe
+                $query = $this->sanitizeRfid($query);
                 if (!empty($query)) {
                     $users = $this->buscarUsuarios($query);
                     echo json_encode($users);
@@ -31,6 +33,8 @@ class LoanAdminController extends Controller {
             // Consulta de préstamos de un usuario específico
             if (isset($_POST['consult_loan_admin'])) {
                 $userRfid = strip_tags($_POST['consult_loan_admin']);
+                // Sanear el RFID eliminando prefijo "APP:" si existe
+                $userRfid = $this->sanitizeRfid($userRfid);
                 if (!empty($userRfid)) {
                     echo $this->consultarPrestamosAdmin($userRfid);
                     exit();
@@ -41,6 +45,10 @@ class LoanAdminController extends Controller {
             if (isset($_POST['return_loan'])) {
                 $equipmentRfid = strip_tags($_POST['equipment_rfid']);
                 $userRfid = strip_tags($_POST['user_rfid']);
+                
+                // Sanear ambos RFIDs eliminando prefijo "APP:" si existe
+                $equipmentRfid = $this->sanitizeRfid($equipmentRfid);
+                $userRfid = $this->sanitizeRfid($userRfid);
                 
                 if (!empty($equipmentRfid) && !empty($userRfid)) {
                     $result = $this->devolverPrestamo($equipmentRfid, $userRfid);
@@ -70,6 +78,16 @@ class LoanAdminController extends Controller {
         
         // Mostrar vista principal
         $this->view('loan_admin/index');
+    }
+    
+    /**
+     * Función saneadora para eliminar prefijo "APP:" del RFID
+     */
+    private function sanitizeRfid($rfidInput) {
+        if (is_string($rfidInput) && strpos($rfidInput, 'APP:') === 0) {
+            return substr($rfidInput, 4); // Eliminar los primeros 4 caracteres "APP:"
+        }
+        return $rfidInput;
     }
     
     /**
