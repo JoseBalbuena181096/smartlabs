@@ -11,6 +11,7 @@ SMARTLABS es una aplicación web desarrollada en PHP que implementa un sistema d
 - **Gestión de dispositivos IoT** con monitoreo de estado
 - **Control de acceso** con registro de tráfico
 - **Sistema de préstamos** de equipos de laboratorio
+- **Cierre Automático de Sesiones**: Cierre inteligente cuando se detecta el mismo RFID, RFID diferente o valor vacío
 - **Gestión de habitantes** y becarios
 - **Estadísticas avanzadas** con filtros por dispositivo
 - **Interfaz responsive** con Bootstrap

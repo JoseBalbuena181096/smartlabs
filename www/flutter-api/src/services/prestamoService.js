@@ -405,6 +405,7 @@ class PrestamoService {
                      this.serialLoanUser = [user];
                      this.countLoanCard = 1;
                      console.log(`✅ Usuario encontrado para préstamo: ${user.hab_name}`);
+                     await this.enviarComandosMQTT(deviceSerie, user.hab_name, 'found');
                      console.log(`🔍 Usuario almacenado en sesión:`, {
                          hab_name: user.hab_name,
                          cards_number: user.cards_number,

@@ -243,6 +243,7 @@ const cadenaAleatoria = generarCadenaAleatoria(6);
 var audio = new Audio('/public/audio/audio.mp3');
 // Variable para almacenar el RFID actual
 var currentRfid = '';
+var lastProcessedRfid = ''; // Variable para rastrear el último RFID procesado
 
 /*
 ******************************
@@ -259,8 +260,24 @@ function process_msg(topic, message){
     // Sanear el RFID eliminando prefijo "APP:" si existe
     var sanitizedRfid = sanitizeRfid(msg);
     
+    // Verificar si es el mismo RFID que el anterior, un RFID diferente, o un valor vacío
+    if (sanitizedRfid === lastProcessedRfid || sanitizedRfid === '' || sanitizedRfid !== currentRfid && currentRfid !== '') {
+      // Limpiar el campo de entrada y los resultados
+      document.getElementById('registration').value = '';
+      $('#resultado_').html('');
+      document.getElementById('display_new_access').innerHTML = 'Sesión cerrada automáticamente';
+      
+      // Limpiar las variables de control
+      currentRfid = '';
+      lastProcessedRfid = '';
+      
+      console.log("Sesión cerrada automáticamente - RFID:", sanitizedRfid);
+      return; // Salir sin procesar más
+    }
+    
     // Almacenar el valor RFID saneado para uso posterior
     currentRfid = sanitizedRfid;
+    lastProcessedRfid = sanitizedRfid;
     
     // Reproducir audio de notificación
     audio.play().catch(function(error) {
@@ -455,8 +472,20 @@ $(document).ready(function() {
             valorInput = sanitizedRfid;
         }
         
+        // Verificar si es el mismo RFID que el anterior o un valor vacío para cerrar sesión
+        if (valorInput === '' || (valorInput === lastProcessedRfid && currentRfid !== '')) {
+            // Limpiar resultados y variables de control
+            $('#resultado_').html('');
+            $('#display_new_access').html('Sesión cerrada manualmente');
+            currentRfid = '';
+            lastProcessedRfid = '';
+            console.log("Sesión cerrada manualmente - RFID:", valorInput);
+            return;
+        }
+        
         // Almacenar el valor saneado como RFID
         currentRfid = sanitizedRfid;
+        lastProcessedRfid = sanitizedRfid;
         
         // Enviar el valor saneado al controlador mediante AJAX (auto-submit)
         if (valorInput.length > 0) {
