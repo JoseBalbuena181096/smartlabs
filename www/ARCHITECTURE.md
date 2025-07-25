@@ -818,9 +818,52 @@ docker-compose up -d
 - **SSL/TLS**: Certificados válidos
 - **Process Management**: PM2 para Node.js
 
+## Correcciones de Errores Críticos
+
+### TypeError: Bind parameters must not contain undefined (Enero 2025)
+
+**Problema identificado:**
+Error en el servicio de préstamos cuando usuarios no tenían RFID asignado, causando fallos en consultas SQL.
+
+**Solución implementada:**
+```javascript
+// Antes: getUserByRegistration solo consultaba tabla habitant
+const query = 'SELECT * FROM habitant WHERE hab_registration = ?';
+
+// Después: Incluye información de tarjetas RFID
+const query = `
+    SELECT h.*, c.cards_number, c.cards_assigned 
+    FROM habitant h 
+    LEFT JOIN cards_habs c ON h.hab_id = c.hab_id 
+    WHERE h.hab_registration = ?
+`;
+
+// Validación agregada
+if (!userRFID) {
+    return {
+        success: false,
+        message: 'Usuario no tiene RFID asignado',
+        action: 'no_rfid'
+    };
+}
+```
+
+**Archivos modificados:**
+- `flutter-api/src/services/prestamoService.js`
+  - Método `getUserByRegistration()`: Mejorado para incluir datos RFID
+  - Método `procesarPrestamo()`: Validación de RFID antes de uso
+  - Método `handleLoanEquipmentQuery()`: Logging y validación mejorados
+
+**Impacto:**
+- ✅ Eliminación completa del error TypeError
+- ✅ Manejo robusto de usuarios sin RFID
+- ✅ Logging detallado para debugging
+- ✅ Mejor experiencia de usuario en la app móvil
+
 ## Roadmap Técnico
 
 ### Corto Plazo
+- [x] ~~Corrección TypeError en prestamoService~~ ✅ Completado
 - [ ] Implementación completa de SSL/TLS
 - [ ] Migrar de SHA1 a bcrypt
 - [ ] Implementar CSRF protection

@@ -966,6 +966,52 @@ sudo netstat -tlnp
 sudo ss -tlnp
 ```
 
+## Correcciones de Errores Críticos
+
+### TypeError: Bind parameters must not contain undefined (Enero 2025)
+
+**Contexto:** Error crítico en la API Flutter que afectaba el sistema de préstamos.
+
+**Síntomas:**
+- Error 500 en endpoint `/api/prestamo/control/`
+- Fallos en consultas SQL cuando usuarios no tenían RFID
+- Interrupciones en el flujo de préstamos desde la app móvil
+
+**Solución aplicada:**
+1. **Modificación en `prestamoService.js`:**
+   - Actualización del método `getUserByRegistration()` para incluir datos RFID
+   - Validación de parámetros antes de consultas SQL
+   - Manejo robusto de casos edge
+
+2. **Validaciones agregadas:**
+   ```javascript
+   if (!userRFID) {
+       return {
+           success: false,
+           message: 'Usuario no tiene RFID asignado',
+           action: 'no_rfid'
+       };
+   }
+   ```
+
+3. **Logging mejorado:**
+   - Logs detallados para debugging
+   - Tracking de sesiones de usuario
+   - Monitoreo de estados RFID
+
+**Verificación post-corrección:**
+```bash
+# Probar endpoint corregido
+curl -X POST http://localhost:3001/api/prestamo/control/ \
+  -H "Content-Type: application/json" \
+  -d '{"registration": "L03533767", "device_serie": "SMART10003", "action": 1}'
+
+# Verificar logs del servidor
+tail -f /var/log/smartlabs/flutter-api.log
+```
+
+**Estado:** ✅ **RESUELTO** - Sistema funcionando correctamente
+
 ## Checklist de Despliegue
 
 ### Pre-despliegue
@@ -975,6 +1021,7 @@ sudo ss -tlnp
 - [ ] Certificados SSL instalados (producción)
 - [ ] Firewall configurado
 - [ ] Backups configurados
+- [x] ~~Corrección TypeError en prestamoService~~ ✅ Aplicada
 
 ### Despliegue
 

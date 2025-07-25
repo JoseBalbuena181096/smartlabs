@@ -373,6 +373,31 @@ Si la conexión principal falla, automáticamente usa el fallback.
 }
 ```
 
+### Errores Comunes Solucionados
+
+#### TypeError: Bind parameters must not contain undefined
+**Problema:** Error en consultas SQL cuando parámetros RFID eran undefined.
+
+**Solución implementada:**
+- Validación de parámetros RFID antes de consultas SQL
+- Mejora en `getUserByRegistration()` para incluir datos de tarjetas RFID
+- Manejo robusto de casos donde usuarios no tienen RFID asignado
+- Logging detallado para debugging
+
+**Archivos afectados:**
+- `src/services/prestamoService.js`: Métodos `getUserByRegistration`, `procesarPrestamo`, `handleLoanEquipmentQuery`
+
+**Validaciones agregadas:**
+```javascript
+if (!userRFID) {
+    return {
+        success: false,
+        message: 'Usuario no tiene RFID asignado',
+        action: 'no_rfid'
+    };
+}
+```
+
 ## Logging
 
 ### Niveles de Log

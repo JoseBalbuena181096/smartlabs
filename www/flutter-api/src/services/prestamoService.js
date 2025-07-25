@@ -47,6 +47,7 @@ class PrestamoService {
 
     /**
      * Obtiene información de un usuario por matrícula
+     * Incluye información de la tarjeta RFID usando la vista cards_habs
      * @param {string} registration - Matrícula del usuario
      * @returns {Object|null} - Datos del usuario o null si no existe
      */
@@ -62,12 +63,37 @@ class PrestamoService {
                 port: process.env.DB_PORT
             });
             
+            // Usar la vista cards_habs para obtener información completa del usuario incluyendo RFID
             const [rows] = await connection.execute(
-                'SELECT * FROM habintants WHERE hab_registration = ?',
+                `SELECT 
+                    h.hab_id,
+                    h.hab_date,
+                    h.hab_name,
+                    h.hab_registration,
+                    h.hab_email,
+                    h.hab_card_id,
+                    h.hab_device_id,
+                    ch.cards_number,
+                    ch.cards_assigned
+                FROM habintants h
+                LEFT JOIN cards_habs ch ON h.hab_id = ch.hab_id
+                WHERE h.hab_registration = ?`,
                 [registration]
             );
             
-            return rows.length > 0 ? rows[0] : null;
+            if (rows.length > 0) {
+                const user = rows[0];
+                console.log(`✅ Usuario encontrado por matrícula ${registration}:`, {
+                    hab_id: user.hab_id,
+                    hab_name: user.hab_name,
+                    hab_registration: user.hab_registration,
+                    cards_number: user.cards_number
+                });
+                return user;
+            }
+            
+            console.log(`❌ No se encontró usuario con matrícula: ${registration}`);
+            return null;
         } catch (error) {
             console.error('❌ Error obteniendo usuario:', error);
             return null;
@@ -98,11 +124,25 @@ class PrestamoService {
             
             // Usar la vista cards_habs igual que el backend Node.js
             const [rows] = await connection.execute(
-                'SELECT * FROM cards_habs WHERE cards_number = ?',
+                `SELECT 
+                    ch.cards_id,
+                    ch.cards_number,
+                    ch.cards_assigned,
+                    ch.hab_id,
+                    ch.hab_name,
+                    ch.hab_device_id
+                FROM cards_habs ch 
+                WHERE ch.cards_number = ?`,
                 [rfidNumber]
             );
             
-            return rows.length > 0 ? rows[0] : null;
+            if (rows.length > 0) {
+                console.log(`✅ Usuario encontrado por RFID ${rfidNumber}:`, rows[0]);
+                return rows[0];
+            }
+            
+            console.log(`❌ No se encontró usuario con RFID: ${rfidNumber}`);
+            return null;
         } catch (error) {
             console.error('❌ Error obteniendo usuario por RFID:', error);
             return null;
@@ -365,6 +405,11 @@ class PrestamoService {
                      this.serialLoanUser = [user];
                      this.countLoanCard = 1;
                      console.log(`✅ Usuario encontrado para préstamo: ${user.hab_name}`);
+                     console.log(`🔍 Usuario almacenado en sesión:`, {
+                         hab_name: user.hab_name,
+                         cards_number: user.cards_number,
+                         hab_id: user.hab_id
+                     });
                      
                      return {
                          success: true,
@@ -404,6 +449,9 @@ class PrestamoService {
      */
     async handleLoanEquipmentQuery(deviceSerie, equipRFID) {
         try {
+            console.log(`🔍 [Loan Equipment Query] Dispositivo: ${deviceSerie}, RFID Equipo: ${equipRFID}`);
+            console.log(`📊 Estado actual: countLoanCard=${this.countLoanCard}, serialLoanUser:`, this.serialLoanUser);
+            
             if (this.countLoanCard === 0 || this.serialLoanUser === null) {
                 await this.enviarComandosMQTT(deviceSerie, null, 'nologin');
                 console.log('⚠️ No hay usuario logueado para préstamo');
@@ -430,8 +478,21 @@ class PrestamoService {
                 }
                 
                 // Registrar nuevo préstamo
+                // Validar que el usuario tenga RFID antes de registrar
+                console.log(`🔍 Validando RFID del usuario en sesión:`, this.serialLoanUser[0]);
+                const userRFID = this.serialLoanUser[0].cards_number;
+                if (!userRFID) {
+                    console.error('❌ Error: Usuario no tiene RFID asignado');
+                    console.log('📊 Datos del usuario en sesión:', this.serialLoanUser[0]);
+                    return {
+                        success: false,
+                        message: 'Usuario no tiene RFID asignado',
+                        action: 'no_rfid'
+                    };
+                }
+                
                 const loanRegistered = await this.registrarPrestamo(
-                    this.serialLoanUser[0].cards_number,
+                    userRFID,
                     equipment.equipments_rfid,
                     newLoanState
                 );
@@ -548,38 +609,27 @@ class PrestamoService {
                 };
             }
             
-            // ✅ FUNCIONALIDAD AGREGADA: Obtener RFID del usuario para replicar comportamiento del hardware
-            let userRFID = null;
-            let connection = null;
-            try {
-                const mysql = require('mysql2/promise');
-                connection = await mysql.createConnection({
-                    host: process.env.DB_HOST,
-                    user: process.env.DB_USER,
-                    password: process.env.DB_PASSWORD,
-                    database: process.env.DB_NAME,
-                    port: process.env.DB_PORT
+            // ✅ FUNCIONALIDAD MEJORADA: Obtener RFID del usuario directamente del objeto usuario
+            const userRFID = usuario.cards_number;
+            console.log(`🔍 RFID del usuario logueado: ${userRFID}`);
+            
+            // Validar que el usuario tenga RFID asignado
+            if (!userRFID) {
+                console.error('❌ Error: Usuario no tiene RFID asignado');
+                console.log('📊 Datos del usuario:', {
+                    hab_id: usuario.hab_id,
+                    hab_date: usuario.hab_date,
+                    hab_name: usuario.hab_name,
+                    hab_registration: usuario.hab_registration,
+                    hab_email: usuario.hab_email,
+                    hab_card_id: usuario.hab_card_id,
+                    hab_device_id: usuario.hab_device_id
                 });
-                
-                const [rows] = await connection.execute(
-                    `SELECT ch.cards_number 
-                     FROM cards_habs ch 
-                     INNER JOIN habintants h ON ch.hab_id = h.hab_id 
-                     WHERE h.hab_registration = ?`,
-                    [registration]
-                );
-                
-                if (rows.length > 0) {
-                    userRFID = rows[0].cards_number;
-                    console.log(`✅ RFID obtenido para ${registration}: ${userRFID}`);
-                } else {
-                    console.log(`⚠️ No se encontró RFID para la matrícula: ${registration}`);
-                }
-                
-            } finally {
-                if (connection) {
-                    await connection.end();
-                }
+                return {
+                    success: false,
+                    message: 'Usuario no tiene RFID asignado',
+                    data: null
+                };
             }
             
             // ✅ RESTAURADO: Publicar RFID al tópico loan_queryu con prefijo para evitar bucle infinito
@@ -601,6 +651,12 @@ class PrestamoService {
                 
                 this.serialLoanUser = [usuario];
                 this.countLoanCard = 1;
+                
+                console.log(`🔍 Usuario almacenado en sesión para préstamos:`, {
+                    hab_name: usuario.hab_name,
+                    cards_number: usuario.cards_number,
+                    hab_id: usuario.hab_id
+                });
                 
                 // Enviar comandos MQTT directamente
                 await this.enviarComandosMQTT(deviceSerie, usuario.hab_name, 'found');
