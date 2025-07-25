@@ -243,7 +243,6 @@ const cadenaAleatoria = generarCadenaAleatoria(6);
 var audio = new Audio('/public/audio/audio.mp3');
 // Variable para almacenar el RFID actual
 var currentRfid = '';
-var lastProcessedRfid = ''; // Variable para rastrear el último RFID procesado
 
 /*
 ******************************
@@ -260,51 +259,16 @@ function process_msg(topic, message){
     // Sanear el RFID eliminando prefijo "APP:" si existe
     var sanitizedRfid = sanitizeRfid(msg);
     
-    // Verificar si es el mismo RFID que el anterior, un RFID diferente, o un valor vacío
-    if (sanitizedRfid === lastProcessedRfid || sanitizedRfid === '' || sanitizedRfid !== currentRfid && currentRfid !== '') {
-      // Limpiar el campo de entrada y los resultados
-      document.getElementById('registration').value = '';
-      $('#resultado_').html('');
-      document.getElementById('display_new_access').innerHTML = 'Sesión cerrada automáticamente';
-      
-      // Limpiar las variables de control
-      currentRfid = '';
-      lastProcessedRfid = '';
-      
-      console.log("Sesión cerrada automáticamente - RFID:", sanitizedRfid);
-      return; // Salir sin procesar más
-    }
-    
-    // Almacenar el valor RFID saneado para uso posterior
-    currentRfid = sanitizedRfid;
-    lastProcessedRfid = sanitizedRfid;
-    
     // Reproducir audio de notificación
     audio.play().catch(function(error) {
       console.log("Error al reproducir audio:", error);
     });
     
     // Mostrar en display de nuevo acceso
-    document.getElementById('display_new_access').innerHTML = 'Nuevo acceso: ' + sanitizedRfid;
+    document.getElementById('display_new_access').innerHTML = 'Procesando RFID: ' + sanitizedRfid;
     
-    // Establecer el valor saneado en el campo de entrada
-    document.getElementById('registration').value = sanitizedRfid;
-    
-    // Realizar la consulta automáticamente con el RFID saneado
-    $.ajax({
-      url: '/Loan/index',
-      method: 'POST',
-      data: { consult_loan: sanitizedRfid },
-      success: function(data) {
-        $('#resultado_').html(""); 
-        var data_ = cortarDespuesDeDoctype(data);
-        $('#resultado_').html(data_);
-        console.log("Consulta MQTT loan_queryu:", data);
-      },
-      error: function() {
-        $('#resultado_').html('<div class="alert alert-danger">Error al consultar préstamos</div>');
-      }
-    });
+    // Procesar RFID con lógica inteligente de sesiones
+    processRfidWithSessionLogic(sanitizedRfid, serial_number);
   } 
   else if (query == "loan_querye") {
     // Usar el RFID almacenado para refrescar la tabla de préstamos
@@ -452,6 +416,144 @@ function sanitizeRfid(rfidInput) {
 
 /*
 ******************************
+****** LÓGICA DE SESIONES ****
+******************************
+*/
+
+/**
+ * Procesa un RFID con lógica inteligente de sesiones
+ * 1. Valida el RFID usando la API Flutter
+ * 2. Consulta el estado actual de la sesión
+ * 3. Decide si mantener o limpiar el input según el estado
+ */
+function processRfidWithSessionLogic(rfid, deviceSerial) {
+    console.log('🔄 Procesando RFID con lógica de sesiones:', rfid);
+    
+    // Paso 1: Validar RFID usando la API Flutter
+    validateRfidWithApi(rfid)
+        .then(function(isValid) {
+            if (!isValid) {
+                console.log('❌ RFID inválido:', rfid);
+                document.getElementById('display_new_access').innerHTML = 
+                    '<span class="text-danger"><i class="fa fa-times-circle"></i> RFID inválido: ' + rfid + '</span>';
+                return;
+            }
+            
+            console.log('✅ RFID válido:', rfid);
+            
+            // Paso 2: Consultar estado actual de la sesión
+            return checkSessionState();
+        })
+        .then(function(sessionState) {
+            if (sessionState === undefined) return; // Error en validación RFID
+            
+            console.log('📊 Estado de sesión actual:', sessionState);
+            
+            // Paso 3: Decidir acción basada en el estado de la sesión
+            if (sessionState.session_active === false) {
+                // No hay sesión activa (estado = 1), enviar espacio en blanco y limpiar datos
+                console.log('🔄 No hay sesión activa, enviando espacio en blanco y limpiando datos');
+                $('#registration').val(' ');
+                $('#resultado_').html(''); // Limpiar datos del usuario
+                currentRfid = ''; // Limpiar RFID actual
+                document.getElementById('display_new_access').innerHTML = 
+                    '<span class="text-info"><i class="fa fa-sign-out"></i> Sesión cerrada</span>';
+            } else {
+                // Hay una sesión activa (estado = 0), mantener el RFID en el input y consultar préstamos
+                console.log('🔄 Sesión activa detectada, manteniendo RFID y consultando préstamos');
+                $('#registration').val(rfid);
+                currentRfid = rfid;
+                document.getElementById('display_new_access').innerHTML = 
+                    '<span class="text-success"><i class="fa fa-sign-in"></i> Sesión activa: ' + rfid + '</span>';
+                consultarPrestamosUsuario(rfid);
+            }
+        })
+        .catch(function(error) {
+            console.error('❌ Error procesando RFID:', error);
+            document.getElementById('display_new_access').innerHTML = 
+                '<span class="text-danger"><i class="fa fa-exclamation-triangle"></i> Error procesando RFID</span>';
+        });
+}
+
+/**
+ * Valida un RFID usando la API Flutter
+ */
+function validateRfidWithApi(rfid) {
+    return new Promise(function(resolve, reject) {
+        $.ajax({
+            url: 'http://192.168.0.100:3001/api/users/rfid/' + encodeURIComponent(rfid),
+            method: 'GET',
+            timeout: 5000,
+            success: function(response) {
+                if (response.success && response.data) {
+                    console.log('✅ Usuario encontrado:', response.data.name);
+                    resolve(true);
+                } else {
+                    console.log('❌ Usuario no encontrado para RFID:', rfid);
+                    resolve(false);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Error validando RFID:', error);
+                if (xhr.status === 404) {
+                    resolve(false); // RFID no encontrado
+                } else {
+                    reject(error); // Error de conexión u otro
+                }
+            }
+        });
+    });
+}
+
+/**
+ * Consulta el estado actual de la sesión usando la API Flutter
+ */
+function checkSessionState() {
+    return new Promise(function(resolve, reject) {
+        $.ajax({
+            url: 'http://192.168.0.100:3001/api/prestamo/estado/',
+            method: 'GET',
+            timeout: 5000,
+            success: function(response) {
+                if (response.success) {
+                    resolve(response.data);
+                } else {
+                    reject('Error obteniendo estado de sesión');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Error consultando estado de sesión:', error);
+                reject(error);
+            }
+        });
+    });
+}
+
+
+
+/**
+ * Consulta los préstamos de un usuario
+ */
+function consultarPrestamosUsuario(rfid) {
+    $.ajax({
+        url: '/Loan/index',
+        method: 'POST',
+        data: { consult_loan: rfid },
+        success: function(data) {
+            $('#resultado_').html(""); 
+            var data_ = cortarDespuesDeDoctype(data);
+            $('#resultado_').html(data_);
+            console.log("✅ Préstamos consultados para:", rfid);
+        },
+        error: function() {
+            $('#resultado_').html('<div class="alert alert-danger">Error al consultar préstamos</div>');
+            console.error('❌ Error consultando préstamos para:', rfid);
+        }
+    });
+}
+
+/*
+******************************
 ****** INICIALIZACION ********
 ******************************
 */
@@ -459,7 +561,7 @@ $(document).ready(function() {
     // Auto-focus en el campo de entrada
     $('#registration').focus();
     
-    // Auto-submit cuando se escribe en el input (como en dash_loan.php)
+    // Auto-submit cuando se escribe en el input con lógica de sesiones
     $('#registration').on('input', function() {
         var valorInput = $(this).val();
         
@@ -472,40 +574,16 @@ $(document).ready(function() {
             valorInput = sanitizedRfid;
         }
         
-        // Verificar si es el mismo RFID que el anterior o un valor vacío para cerrar sesión
-        if (valorInput === '' || (valorInput === lastProcessedRfid && currentRfid !== '')) {
-            // Limpiar resultados y variables de control
-            $('#resultado_').html('');
-            $('#display_new_access').html('Sesión cerrada manualmente');
-            currentRfid = '';
-            lastProcessedRfid = '';
-            console.log("Sesión cerrada manualmente - RFID:", valorInput);
-            return;
-        }
-        
-        // Almacenar el valor saneado como RFID
-        currentRfid = sanitizedRfid;
-        lastProcessedRfid = sanitizedRfid;
-        
-        // Enviar el valor saneado al controlador mediante AJAX (auto-submit)
+        // Procesar con lógica de sesiones si hay valor
         if (valorInput.length > 0) {
-            $.ajax({
-                url: '/Loan/index', // Controlador que maneja la consulta
-                method: 'POST',
-                data: { consult_loan: valorInput },
-                success: function(data) {
-                  $('#resultado_').html(""); 
-                  var data_ = cortarDespuesDeDoctype(data);
-                  $('#resultado_').html(data_); // Mostrar resultado
-                  console.log("Consulta auto-submit:", data);
-                },
-                error: function() {
-                  $('#resultado_').html('<div class="alert alert-danger">Error al consultar préstamos</div>');
-                }
-            });
+            // Usar la nueva lógica de sesiones para input manual
+            processRfidWithSessionLogic(sanitizedRfid, 'WEBAPP001');
         } else {
             // Limpiar resultados si el campo está vacío
             $('#resultado_').html('');
+            currentRfid = '';
+            document.getElementById('display_new_access').innerHTML = 
+                '<span class="text-muted"><i class="fa fa-info-circle"></i> Ingresa un RFID</span>';
         }
     });
     

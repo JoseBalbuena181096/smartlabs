@@ -42,6 +42,12 @@ long lastMsg = 0;
 char msg[25];
 bool send_access_query = false;
 
+// Variables para timeout automático
+bool session_active = false;
+unsigned long session_start_time = 0;
+const unsigned long SESSION_TIMEOUT = 150000; // 2 minutos y medio en milisegundos
+String current_user_rfid = "";
+
 //********************************
 //***   CONFIGURACION OLED     ***
 //********************************
@@ -66,6 +72,9 @@ void callback(char *topic, byte *payload, unsigned int length);
 void reconnect();
 void iddle();
 void sending();
+void loadAcount();
+void noLoadAcount();
+void unload();
 
 //*****************************
 //***   SENSOR INT TEMP     ***
@@ -187,6 +196,7 @@ void loop()
     {
 
         String to_send = rfid;
+        current_user_rfid = rfid; // Guardar RFID del usuario actual
         rfid = "";
 
         sending();
@@ -201,6 +211,28 @@ void loop()
         send_access_query = false;
 
         rfid = "";
+    }
+
+    // Verificar timeout automático de sesión (3 minutos)
+    if (session_active && (millis() - session_start_time >= SESSION_TIMEOUT))
+    {
+        Serial.println("Timeout de sesión - Cerrando automáticamente");
+        
+        // Simular exactamente el mismo proceso que cuando se coloca credencial
+        if (current_user_rfid.length() > 0)
+        {
+            // Restaurar el RFID para simular lectura de credencial
+            rfid = current_user_rfid;
+            
+            // Activar el mismo flag que se usa en lectura normal
+            send_access_query = true;
+            
+            Serial.println("Simulando colocación de credencial para timeout: " + current_user_rfid);
+            
+            // Resetear variables de sesión SOLO después de configurar el envío
+            session_active = false;
+            current_user_rfid = "";
+        }
     }
 }
 
@@ -336,6 +368,8 @@ void callback(char *topic, byte *payload, unsigned int length)
         if (incoming == "found")
         {
             state_device = true;
+            session_active = true;
+            session_start_time = millis(); // Iniciar contador de 3 minutos
             for (int i = 0; i < 4; i++)
             {
                 digitalWrite(BUILTIN_LED, HIGH);
@@ -347,6 +381,8 @@ void callback(char *topic, byte *payload, unsigned int length)
         }
         if (incoming == "nofound")
         {
+            session_active = false; // Asegurar que no hay sesión activa
+            current_user_rfid = ""; // Limpiar RFID almacenado
             for (int i = 0; i < 4; i++)
             {
                 digitalWrite(BUILTIN_LED, HIGH);
@@ -359,6 +395,8 @@ void callback(char *topic, byte *payload, unsigned int length)
 
         if (incoming == "unload")
         {
+            session_active = false; // Cancelar timeout automático
+            current_user_rfid = ""; // Limpiar RFID almacenado
             for (int i = 0; i < 4; i++)
             {
                 digitalWrite(BUILTIN_LED, HIGH);
