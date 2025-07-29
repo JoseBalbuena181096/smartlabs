@@ -1,332 +1,247 @@
-# SMARTLABS Flutter API
+# SmartLabs Flutter API
 
-## Descripción
+## 🚀 Descripción
 
-API REST para aplicación Flutter de control de equipos SMARTLABS. Esta API proporciona funcionalidades para el manejo de usuarios, dispositivos IoT y préstamos de equipos en un entorno de laboratorio inteligente.
+API REST desarrollada en Node.js para la aplicación móvil Flutter de SmartLabs. Proporciona endpoints para el control de dispositivos IoT, gestión de usuarios y préstamos de equipos de laboratorio.
 
-## Características Principales
+## ⚡ Inicio Rápido
 
-- 🔐 **Autenticación por API Key**
-- 📱 **Integración con Flutter**
-- 🏠 **Comunicación MQTT con dispositivos IoT**
-- 📊 **Base de datos MySQL**
-- 🔄 **Sistema de préstamos de equipos**
-- 📈 **Historial de uso y accesos**
-- 🛡️ **Middleware de seguridad**
+### Instalación
+```bash
+# Instalar dependencias
+npm install
 
-## Tecnologías Utilizadas
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tus configuraciones
 
-- **Node.js** - Runtime de JavaScript
-- **Express.js** - Framework web
-- **MySQL2** - Cliente de base de datos
-- **MQTT** - Protocolo de comunicación IoT
-- **Joi** - Validación de datos
-- **Helmet** - Seguridad HTTP
-- **CORS** - Cross-Origin Resource Sharing
-- **dotenv** - Gestión de variables de entorno
+# Ejecutar en desarrollo
+npm run dev
 
-## Instalación
-
-### Prerrequisitos
-
-- Node.js (v14 o superior)
-- MySQL Server
-- Broker MQTT (EMQX recomendado)
-
-### Pasos de Instalación
-
-1. **Clonar el repositorio**
-   ```bash
-   git clone <repository-url>
-   cd flutter-api
-   ```
-
-2. **Instalar dependencias**
-   ```bash
-   npm install
-   ```
-
-3. **Configurar variables de entorno**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Editar el archivo `.env` con tus configuraciones:
-   ```env
-   # Configuración del Servidor
-   PORT=3000
-   NODE_ENV=development
-   
-   # Base de Datos MySQL
-   DB_HOST=localhost
-   DB_USER=tu_usuario
-   DB_PASSWORD=tu_password
-   DB_NAME=smartlabs
-   DB_PORT=3306
-   
-   # MQTT Broker
-   MQTT_HOST=192.168.0.100
-   MQTT_PORT=1883
-   MQTT_USERNAME=admin
-   MQTT_PASSWORD=public
-   MQTT_CLIENT_ID=flutter_api_client
-   ```
-
-4. **Iniciar la aplicación**
-   ```bash
-   # Desarrollo
-   npm run dev
-   
-   # Producción
-   npm start
-   ```
-
-## Estructura del Proyecto
-
-```
-src/
-├── config/
-│   ├── database.js      # Configuración de MySQL
-│   └── mqtt.js          # Configuración de MQTT
-├── controllers/
-│   ├── userController.js     # Controlador de usuarios
-│   ├── deviceController.js   # Controlador de dispositivos
-│   └── prestamoController.js # Controlador de préstamos
-├── middleware/
-│   ├── auth.js          # Middleware de autenticación
-│   └── errorHandler.js  # Manejo de errores
-├── routes/
-│   ├── userRoutes.js    # Rutas de usuarios
-│   ├── deviceRoutes.js  # Rutas de dispositivos
-│   ├── prestamoRoutes.js # Rutas de préstamos
-│   └── internalRoutes.js # Rutas internas
-├── services/
-│   ├── userService.js        # Lógica de negocio de usuarios
-│   ├── deviceService.js      # Lógica de negocio de dispositivos
-│   ├── prestamoService.js    # Lógica de negocio de préstamos
-│   └── mqttListenerService.js # Servicio de escucha MQTT
-└── index.js             # Punto de entrada de la aplicación
+# Ejecutar en producción
+npm start
 ```
 
-## API Endpoints
+### Docker
+```bash
+# Construir imagen
+docker build -t smartlabs-flutter-api .
 
-### Usuarios
+# Ejecutar contenedor
+docker run -p 3000:3000 --env-file .env smartlabs-flutter-api
+```
 
-#### `GET /api/users/registration/:registration`
-Obtiene un usuario por matrícula.
+## 🔗 Endpoints Principales
 
-**Parámetros:**
-- `registration` (string): Matrícula del usuario
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/health` | Health check |
+| GET | `/api` | Información de la API |
+| POST | `/api/devices/control` | Controlar dispositivos |
+| GET | `/api/users/registration/:id` | Obtener usuario |
+| GET | `/api/users/:registration/devices` | Dispositivos del usuario |
+| POST | `/api/prestamo/control/` | Gestión de préstamos |
+| GET | `/api/mqtt/status` | Estado del broker MQTT |
 
-**Respuesta:**
+## 📱 Ejemplo de Uso
+
+### Controlar Dispositivo
+```bash
+curl -X POST http://localhost:3000/api/devices/control \
+  -H "Content-Type: application/json" \
+  -d '{
+    "registration": "A12345678",
+    "device_serie": "DEV001",
+    "action": "on"
+  }'
+```
+
+### Respuesta
 ```json
 {
   "success": true,
-  "message": "Usuario encontrado exitosamente",
+  "message": "Dispositivo controlado exitosamente",
   "data": {
-    "id": 1,
-    "name": "Juan Pérez",
-    "registration": "12345",
-    "email": "juan@example.com",
-    "cards_number": "ABCD1234",
-    "device_id": "DEV001"
+    "device_serie": "DEV001",
+    "action": "on",
+    "timestamp": "2024-01-15T10:30:00Z"
   }
 }
 ```
 
-#### `GET /api/users/rfid/:rfid`
-Obtiene un usuario por RFID.
+## 🏗️ Arquitectura
 
-**Parámetros:**
-- `rfid` (string): Código RFID del usuario
-
-#### `GET /api/users/registration/:registration/history`
-Obtiene el historial de acceso de un usuario.
-
-**Query Parameters:**
-- `limit` (number, opcional): Límite de registros (default: 10, max: 100)
-
-#### `GET /api/users/validate/:registration`
-Valida si un usuario existe.
-
-### Dispositivos
-
-#### `POST /api/devices/control`
-Controla un dispositivo (encender/apagar).
-
-**Body:**
-```json
-{
-  "registration": "12345",
-  "device_serie": "DEV001",
-  "action": 1
-}
+```
+src/
+├── config/          # Configuración (DB, MQTT)
+├── controllers/     # Lógica de endpoints
+├── services/        # Lógica de negocio
+├── routes/          # Definición de rutas
+├── middleware/      # Validación, autenticación
+└── utils/           # Utilidades y helpers
 ```
 
-**Parámetros:**
-- `registration` (string): Matrícula del usuario
-- `device_serie` (string): Serie del dispositivo
-- `action` (number): 0 = apagar, 1 = encender
-
-#### `GET /api/devices/:device_serie`
-Obtiene información de un dispositivo por su serie.
-
-#### `GET /api/devices/:device_serie/history`
-Obtiene el historial de uso de un dispositivo.
-
-**Query Parameters:**
-- `limit` (number, opcional): Límite de registros (default: 20, max: 100)
-
-#### `GET /api/devices/:device_serie/status`
-Obtiene el estado actual de un dispositivo.
-
-#### `GET /api/devices/`
-Obtiene todos los dispositivos disponibles.
-
-### Préstamos
-
-#### `POST /api/prestamos/control`
-Controla un dispositivo de préstamo.
-
-**Body:**
-```json
-{
-  "registration": "12345",
-  "device_serie": "DEV001",
-  "action": 1
-}
-```
-
-#### `POST /api/prestamos/prestar`
-Realiza un préstamo de equipo.
-
-#### `POST /api/prestamos/simular-dispositivo`
-Simula el comportamiento del dispositivo físico.
-
-#### `GET /api/prestamos/estado-sesion`
-Obtiene el estado actual de la sesión de préstamos.
-
-## Comunicación MQTT
-
-La API incluye un servicio de escucha MQTT que maneja las comunicaciones con los dispositivos IoT del laboratorio.
-
-### Tópicos MQTT
-
-- `SMART*/loan_queryu` - Consultas de usuario
-- `SMART*/loan_querye` - Consultas de equipo
-- `SMART*/access_query` - Consultas de acceso
-- `SMART*/scholar_query` - Consultas de becarios
-- `SMART*/sensor_data` - Datos de sensores
-
-### Configuración MQTT
-
-La configuración MQTT se realiza a través de variables de entorno:
-
-```env
-MQTT_HOST=192.168.0.100
-MQTT_PORT=1883
-MQTT_USERNAME=admin
-MQTT_PASSWORD=public
-MQTT_CLIENT_ID=flutter_api_client
-```
-
-## Base de Datos
-
-La API utiliza MySQL como base de datos principal. La configuración incluye:
-
-- Conexión principal con fallback automático
-- Pool de conexiones para mejor rendimiento
-- Manejo de reconexión automática
-- Charset UTF8MB4 para soporte completo de Unicode
-
-### Tablas Principales
-
-- `users` - Información de usuarios
-- `devices` - Información de dispositivos
-- `loans` - Registro de préstamos
-- `access_logs` - Logs de acceso
-- `sensor_data` - Datos de sensores
-
-## Seguridad
-
-### Autenticación
-
-La API utiliza autenticación por API Key:
-
-```javascript
-// Header
-X-API-Key: tu_api_key_aqui
-
-// Query Parameter
-?api_key=tu_api_key_aqui
-```
-
-### Middleware de Seguridad
-
-- **Helmet**: Configuración de headers de seguridad HTTP
-- **CORS**: Control de acceso cross-origin
-- **Rate Limiting**: Limitación de peticiones por IP
-- **Validación de datos**: Validación con Joi
-
-## Desarrollo
-
-### Scripts Disponibles
-
-```bash
-# Desarrollo con auto-reload
-npm run dev
-
-# Producción
-npm start
-
-# Tests (pendiente implementación)
-npm test
-```
+## ⚙️ Configuración
 
 ### Variables de Entorno
+```bash
+# Servidor
+PORT=3000
+NODE_ENV=development
 
-Copia `.env.example` a `.env` y configura las siguientes variables:
+# Base de Datos
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=emqxuser
+DB_PASSWORD=emqxpass
+DB_NAME=emqx
 
-| Variable | Descripción | Valor por defecto |
-|----------|-------------|-------------------|
-| `PORT` | Puerto del servidor | 3000 |
-| `NODE_ENV` | Entorno de ejecución | development |
-| `DB_HOST` | Host de MySQL | localhost |
-| `DB_USER` | Usuario de MySQL | admin_iotcurso |
-| `DB_PASSWORD` | Contraseña de MySQL | - |
-| `DB_NAME` | Nombre de la base de datos | smartlabs |
-| `DB_PORT` | Puerto de MySQL | 3306 |
-| `MQTT_HOST` | Host del broker MQTT | 192.168.0.100 |
-| `MQTT_PORT` | Puerto del broker MQTT | 1883 |
-| `MQTT_USERNAME` | Usuario MQTT | admin |
-| `MQTT_PASSWORD` | Contraseña MQTT | public |
+# MQTT
+MQTT_HOST=localhost
+MQTT_PORT=1883
+MQTT_USERNAME=smartlabs
+MQTT_PASSWORD=smartlabs123
+```
 
-## Monitoreo y Logs
+## 🔧 Dependencias
 
-La aplicación incluye logging detallado para:
+### Principales
+- **express**: Framework web
+- **mysql2**: Cliente MySQL
+- **mqtt**: Cliente MQTT
+- **cors**: Cross-Origin Resource Sharing
+- **helmet**: Headers de seguridad
+- **joi**: Validación de datos
+- **express-rate-limit**: Limitación de requests
 
-- Conexiones de base de datos
-- Comunicaciones MQTT
-- Peticiones HTTP
-- Errores y excepciones
-- Estado de dispositivos
+### Desarrollo
+- **nodemon**: Auto-restart en desarrollo
+- **jest**: Testing framework
+- **supertest**: Testing de APIs
 
-## Contribución
+## 🧪 Testing
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+```bash
+# Ejecutar tests
+npm test
 
-## Licencia
+# Tests con coverage
+npm run test:coverage
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+# Tests en modo watch
+npm run test:watch
+```
 
-## Soporte
+## 📊 Monitoreo
 
-Para soporte técnico o preguntas, contacta al equipo de SMARTLABS.
+### Health Check
+```bash
+curl http://localhost:3000/health
+```
+
+### Logs
+```bash
+# Ver logs en tiempo real
+tail -f logs/combined.log
+
+# Ver solo errores
+tail -f logs/error.log
+```
+
+## 🔐 Seguridad
+
+- **Rate Limiting**: 100 requests por 15 minutos
+- **CORS**: Configurado para dominios específicos
+- **Helmet**: Headers de seguridad HTTP
+- **Validación**: Joi para validar entrada de datos
+- **Sanitización**: Prevención de inyección SQL
+
+## 📚 Documentación
+
+- **Documentación Técnica**: [`docs/API_DOCUMENTATION.md`](./docs/API_DOCUMENTATION.md)
+- **Endpoints**: Disponible en `GET /api`
+- **Postman Collection**: `docs/SmartLabs_API.postman_collection.json`
+
+## 🚀 Despliegue
+
+### Producción
+```bash
+# Variables de producción
+export NODE_ENV=production
+export PORT=3000
+
+# Instalar dependencias de producción
+npm ci --only=production
+
+# Ejecutar
+npm start
+```
+
+### Docker Compose
+```yaml
+services:
+  flutter-api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mariadb
+      - MQTT_HOST=emqx
+    depends_on:
+      - mariadb
+      - emqx
+```
+
+## 🤝 Contribución
+
+1. Fork del repositorio
+2. Crear rama feature (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit cambios (`git commit -am 'Agregar nueva funcionalidad'`)
+4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+5. Crear Pull Request
+
+## 📄 Scripts NPM
+
+```json
+{
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
+  }
+}
+```
+
+## 🐛 Debugging
+
+### Modo Debug
+```bash
+# Habilitar debug
+DEBUG=smartlabs:* npm run dev
+
+# Debug específico
+DEBUG=smartlabs:api npm run dev
+```
+
+### Logs Detallados
+```bash
+# Nivel de log
+LOG_LEVEL=debug npm run dev
+```
+
+## 📞 Soporte
+
+- **Issues**: [GitHub Issues](https://github.com/smartlabs/flutter-api/issues)
+- **Documentación**: [`docs/`](./docs/)
+- **Email**: soporte@smartlabs.com
 
 ---
 
-**SMARTLABS Team** - Sistema de Control de Equipos IoT
+**Puerto por defecto**: 3000  
+**Versión**: 1.0.0  
+**Node.js**: >= 18.0.0

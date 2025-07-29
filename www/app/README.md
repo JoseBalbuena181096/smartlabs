@@ -1,489 +1,368 @@
-# SMARTLABS Web Application
+# SmartLabs Web Application (PHP)
 
-## Descripción
+🌐 **Aplicación web PHP para la gestión del sistema SmartLabs**
 
-**SMARTLABS Web Application** es una aplicación web PHP que implementa un sistema de gestión de laboratorios inteligentes. Utiliza una arquitectura MVC (Model-View-Controller) para gestionar usuarios, dispositivos, préstamos de equipos y monitoreo en tiempo real a través de MQTT y WebSocket.
+Aplicación web desarrollada en PHP que proporciona una interfaz de usuario completa para la gestión de dispositivos IoT, usuarios, equipos y préstamos en el ecosistema SmartLabs.
 
-## Características Principales
+## 🚀 Inicio Rápido
 
-### 🔐 Sistema de Autenticación
-- Login seguro con validación de credenciales
-- Gestión de sesiones de usuario
-- Control de acceso basado en roles
+### Instalación Local
 
-### 📊 Dashboard Interactivo
-- Monitoreo en tiempo real de dispositivos
-- Estadísticas de uso y acceso
-- Visualización de datos históricos
-- Integración con sistemas externos
+```bash
+# Clonar el repositorio
+git clone <repository-url>
+cd smartlabs/app
 
-### 🔧 Gestión de Dispositivos
-- Registro y administración de dispositivos IoT
-- Control remoto de equipos
-- Monitoreo de estado en tiempo real
-- Historial de actividad
+# Configurar servidor web (Apache/Nginx)
+# Apuntar DocumentRoot a la carpeta 'public'
 
-### 👥 Gestión de Usuarios
-- Administración de habitantes/usuarios del laboratorio
-- Gestión de becarios y permisos
-- Registro de actividades por usuario
+# Configurar base de datos
+cp .env.example .env
+# Editar .env con las credenciales de tu base de datos
 
-### 📦 Sistema de Préstamos
-- Gestión de préstamos de equipos
-- Control de inventario
-- Historial de préstamos
-- Notificaciones automáticas
-
-### 📈 Estadísticas y Reportes
-- Análisis de uso de dispositivos
-- Reportes de actividad por usuario
-- Métricas de rendimiento del laboratorio
-
-## Tecnologías Utilizadas
-
-### Backend
-- **PHP 7.4+**: Lenguaje principal del servidor
-- **MySQL 8.0**: Base de datos principal
-- **MySQLi**: Driver de base de datos
-- **Arquitectura MVC**: Patrón de diseño
-
-### Frontend
-- **HTML5/CSS3**: Estructura y estilos
-- **JavaScript ES6+**: Funcionalidad del cliente
-- **Bootstrap**: Framework CSS
-- **Font Awesome**: Iconografía
-- **jQuery**: Manipulación del DOM
-
-### Comunicación
-- **MQTT**: Protocolo de mensajería IoT
-- **WebSocket**: Comunicación en tiempo real
-- **AJAX**: Comunicación asíncrona
-- **JSON**: Formato de intercambio de datos
-
-## Estructura del Proyecto
-
-```
-c:\laragon\www/
-├── index.php                    # Punto de entrada principal
-├── README.md                    # Este archivo
-├── .htaccess                   # Configuración Apache
-├── app/                        # Aplicación principal
-│   ├── controllers/            # Controladores MVC
-│   │   ├── AuthController.php
-│   │   ├── DashboardController.php
-│   │   ├── DeviceController.php
-│   │   ├── EquipmentController.php
-│   │   ├── HabitantController.php
-│   │   ├── LoanController.php
-│   │   └── StatsController.php
-│   ├── core/                   # Núcleo del framework
-│   │   ├── Controller.php      # Clase base de controladores
-│   │   ├── Database.php        # Gestión de base de datos
-│   │   ├── Router.php          # Enrutador de URLs
-│   │   └── autoload.php        # Cargador automático
-│   ├── models/                 # Modelos de datos
-│   │   ├── User.php
-│   │   ├── Device.php
-│   │   ├── Equipment.php
-│   │   ├── Habitant.php
-│   │   ├── Loan.php
-│   │   └── Traffic.php
-│   └── views/                  # Vistas de la aplicación
-│       ├── auth/
-│       ├── dashboard/
-│       ├── device/
-│       ├── equipment/
-│       ├── habitant/
-│       ├── layout/
-│       ├── loan/
-│       └── stats/
-├── config/                     # Configuraciones
-│   ├── app.php                # Configuración de la aplicación
-│   └── database.php           # Configuración de base de datos
-├── public/                     # Archivos públicos
-│   ├── index.php              # Punto de entrada alternativo
-│   ├── js/                    # JavaScript del cliente
-│   │   ├── config.js
-│   │   ├── mqtt-client.js
-│   │   ├── device-status-websocket.js
-│   │   └── [otros archivos JS]
-│   └── audio/                 # Archivos de audio
-├── assets/                     # Recursos estáticos
-│   ├── bootstrap/
-│   ├── font-awesome/
-│   ├── images/
-│   └── styles/
-├── libs/                       # Librerías externas
-│   ├── jquery/
-│   ├── angular/
-│   └── mqtt/
-└── views/                      # Vistas adicionales
-    ├── app/
-    ├── blocks/
-    ├── chart/
-    └── ui/
+# Importar esquema de base de datos
+mysql -u username -p database_name < database/schema.sql
 ```
 
-## Instalación
+### Con Docker
 
-### Prerrequisitos
+```bash
+# Desde el directorio raíz del proyecto
+docker-compose up web
 
-- **PHP 7.4 o superior**
-- **MySQL 8.0 o superior**
-- **Apache/Nginx** con mod_rewrite habilitado
-- **Composer** (opcional, para dependencias futuras)
+# La aplicación estará disponible en http://localhost:8080
+```
 
-### Pasos de Instalación
+## 📋 Características Principales
 
-1. **Clonar o descargar el proyecto**
-   ```bash
-   git clone <repository-url>
-   cd smartlabs-web-app
-   ```
+| Módulo | Descripción | Usuarios |
+|--------|-------------|----------|
+| **Dashboard** | Panel principal con estadísticas y estado de dispositivos | Todos |
+| **Dispositivos** | Gestión y control de dispositivos IoT | Todos |
+| **Equipos** | Catálogo de equipos de laboratorio | Todos |
+| **Préstamos** | Sistema de préstamos de equipos | Todos |
+| **Usuarios** | Gestión de usuarios y permisos | Admin |
+| **Administración** | Gestión avanzada de préstamos | Admin |
+| **Estadísticas** | Reportes y análisis de uso | Admin |
 
-2. **Configurar el servidor web**
-   - Configurar el document root hacia `c:\laragon\www`
-   - Asegurar que mod_rewrite esté habilitado
-   - Configurar permisos de escritura en directorios necesarios
+## 🏗️ Arquitectura
 
-3. **Configurar la base de datos**
-   ```sql
-   CREATE DATABASE emqx CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   CREATE USER 'smartlabs'@'localhost' IDENTIFIED BY 'password';
-   GRANT ALL PRIVILEGES ON emqx.* TO 'smartlabs'@'localhost';
-   FLUSH PRIVILEGES;
-   ```
+### Patrón MVC
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│     Router      │───▶│   Controller    │───▶│     Model       │
+│   (Routes)      │    │   (Logic)       │    │   (Data)        │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   index.php     │    │     Views       │    │   Database      │
+│ (Entry Point)   │    │  (Templates)    │    │   (MySQL)       │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
 
-4. **Configurar archivos de configuración**
-   
-   Editar `config/database.php`:
-   ```php
-   <?php
-   return [
-       'host' => 'localhost',
-       'username' => 'smartlabs',
-       'password' => 'password',
-       'database' => 'emqx',
-       'port' => '3306',
-       'charset' => 'utf8mb4'
-   ];
-   ```
-   
-   Editar `config/app.php`:
-   ```php
-   <?php
-   return [
-       'app_name' => 'SMARTLABS',
-       'app_url' => 'http://localhost',
-       'default_controller' => 'Dashboard',
-       'default_action' => 'index',
-       'assets_path' => '/assets/',
-       'session_timeout' => 3600
-   ];
-   ```
+### Estructura de Directorios
+```
+app/
+├── controllers/     # Lógica de negocio
+├── models/         # Modelos de datos
+├── views/          # Templates HTML
+├── core/           # Clases base (Router, Controller, Database)
+├── helpers/        # Funciones auxiliares
+├── middleware/     # Middleware de seguridad
+├── config/         # Archivos de configuración
+└── public/         # Punto de entrada y assets
+```
 
-5. **Importar esquema de base de datos**
-   ```bash
-   mysql -u smartlabs -p emqx < database/schema.sql
-   ```
+## ⚙️ Configuración
 
-6. **Configurar permisos**
-   ```bash
-   chmod -R 755 app/
-   chmod -R 644 config/
-   ```
+### Variables de Entorno
 
-## Configuración
+```env
+# Base de datos principal
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=emqx
+DB_USER=emqxuser
+DB_PASSWORD=emqxpass
 
-### Base de Datos
+# Base de datos externa (dashboard)
+EXTERNAL_DB_HOST=external-db.com
+EXTERNAL_DB_PORT=3306
+EXTERNAL_DB_NAME=external_db
+EXTERNAL_DB_USER=external_user
+EXTERNAL_DB_PASSWORD=external_pass
 
-La aplicación utiliza dos conexiones de base de datos:
+# Configuración de la aplicación
+APP_NAME=SmartLabs
+APP_URL=http://localhost
+APP_ENV=development
+APP_DEBUG=true
 
-1. **Base de datos principal** (configurada en `config/database.php`)
-   - Usuarios, dispositivos, préstamos
-   - Configuración de la aplicación
+# APIs externas
+FLUTTER_API_URL=http://localhost:3000
+MONITOR_API_URL=http://localhost:8080
 
-2. **Base de datos externa** (hardcodeada en controladores)
-   - Datos de tráfico y actividad en tiempo real
-   - Integración con sistemas IoT
+# Seguridad
+SESSION_LIFETIME=7200
+CSRF_PROTECTION=true
+RATE_LIMIT_ENABLED=true
+```
 
-### MQTT
+### Configuración de Apache
 
-Configuración en `public/js/config.js`:
-```javascript
-mqtt: {
-    brokerUrl: 'ws://localhost:8083/mqtt',
-    username: 'jose',
-    password: 'public',
-    clientId: 'iotmc' + Math.random().toString(16).substr(2, 8),
-    topics: {
-        deviceStatus: 'smartlabs/devices/+/status',
-        deviceRfid: 'smartlabs/devices/+/rfid',
-        deviceControl: 'smartlabs/devices/+/control'
-    }
+```apache
+<VirtualHost *:80>
+    DocumentRoot /var/www/html/public
+    ServerName smartlabs.local
+    
+    <Directory /var/www/html/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    ErrorLog ${APACHE_LOG_DIR}/smartlabs_error.log
+    CustomLog ${APACHE_LOG_DIR}/smartlabs_access.log combined
+</VirtualHost>
+```
+
+## 🔧 Dependencias
+
+### Requisitos del Sistema
+- **PHP**: >= 8.0
+- **MySQL**: >= 5.7 o MariaDB >= 10.3
+- **Apache**: >= 2.4 con mod_rewrite
+- **Extensiones PHP**: mysqli, pdo, pdo_mysql, json, session
+
+### Librerías Frontend
+- **Bootstrap**: 5.3.0 (CSS Framework)
+- **Font Awesome**: 6.0.0 (Iconos)
+- **jQuery**: 3.6.0 (JavaScript)
+- **Chart.js**: 3.9.1 (Gráficos)
+
+## 🔐 Autenticación y Seguridad
+
+### Sistema de Autenticación
+```php
+// Login de usuario
+$_SESSION['logged_in'] = true;
+$_SESSION['user_id'] = $user['id'];
+$_SESSION['user_email'] = $user['email'];
+$_SESSION['user_role'] = $user['role'];
+
+// Verificación de autenticación
+if (!isset($_SESSION['logged_in']) || !$_SESSION['logged_in']) {
+    redirect('/Auth/login');
 }
 ```
 
-### Sesiones
+### Roles de Usuario
+- **user**: Usuario estándar (acceso a dispositivos y préstamos)
+- **admin**: Administrador (acceso completo al sistema)
 
-La aplicación utiliza sesiones PHP nativas:
-- Timeout configurable en `config/app.php`
-- Validación automática en cada request
-- Redirección automática al login si no está autenticado
+### Medidas de Seguridad
+- ✅ Protección CSRF
+- ✅ Sanitización de entrada
+- ✅ Prevención de XSS
+- ✅ Headers de seguridad
+- ✅ Rate limiting
+- ✅ Validación de sesiones
 
-## Uso
+## 📡 Integración con APIs
 
-### Acceso a la Aplicación
-
-1. **URL Principal**: `http://localhost/`
-2. **Login**: `http://localhost/Auth/login`
-3. **Dashboard**: `http://localhost/Dashboard` (requiere autenticación)
-
-### Rutas Principales
-
-| Ruta | Controlador | Descripción |
-|------|-------------|-------------|
-| `/` | Dashboard | Página principal |
-| `/Auth/login` | Auth | Página de login |
-| `/Dashboard` | Dashboard | Panel principal |
-| `/Device` | Device | Gestión de dispositivos |
-| `/Equipment` | Equipment | Gestión de equipos |
-| `/Habitant` | Habitant | Gestión de usuarios |
-| `/Loan` | Loan | Gestión de préstamos |
-| `/Stats` | Stats | Estadísticas y reportes |
-
-### API Endpoints
-
-La aplicación expone varios endpoints AJAX:
-
-```javascript
-// Ejemplos de uso
-fetch('/Dashboard/getDeviceStatus', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_id: 'device001' })
-})
-.then(response => response.json())
-.then(data => console.log(data));
-```
-
-## Esquema de Base de Datos
-
-### Tabla: users
-```sql
-CREATE TABLE users (
-    users_id INT AUTO_INCREMENT PRIMARY KEY,
-    users_email VARCHAR(100) UNIQUE NOT NULL,
-    users_password VARCHAR(255) NOT NULL,
-    users_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Tabla: devices
-```sql
-CREATE TABLE devices (
-    devices_id INT AUTO_INCREMENT PRIMARY KEY,
-    devices_alias VARCHAR(100) NOT NULL,
-    devices_serie VARCHAR(50) UNIQUE NOT NULL,
-    devices_user_id INT,
-    devices_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (devices_user_id) REFERENCES users(users_id)
-);
-```
-
-### Tabla: habintants (Base de datos externa)
-```sql
-CREATE TABLE habintants (
-    hab_id INT AUTO_INCREMENT PRIMARY KEY,
-    hab_name VARCHAR(100) NOT NULL,
-    hab_registration VARCHAR(20) UNIQUE,
-    hab_email VARCHAR(100),
-    hab_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### Tabla: traffic (Base de datos externa)
-```sql
-CREATE TABLE traffic (
-    traffic_id INT AUTO_INCREMENT PRIMARY KEY,
-    traffic_device VARCHAR(50) NOT NULL,
-    traffic_state TINYINT NOT NULL,
-    traffic_date DATETIME NOT NULL,
-    traffic_hab_id INT,
-    FOREIGN KEY (traffic_hab_id) REFERENCES habintants(hab_id)
-);
-```
-
-## Seguridad
-
-### Medidas Implementadas
-
-1. **Autenticación**
-   - Hash SHA1 para contraseñas (recomendado migrar a bcrypt)
-   - Validación de sesiones en cada request
-   - Timeout automático de sesiones
-
-2. **Validación de Datos**
-   - Sanitización de inputs en controladores
-   - Prepared statements para consultas SQL
-   - Validación de tipos de datos
-
-3. **Control de Acceso**
-   - Verificación de autenticación en controladores protegidos
-   - Redirección automática a login
-   - Separación de rutas públicas y privadas
-
-### Recomendaciones de Seguridad
-
-1. **Migrar a bcrypt** para hash de contraseñas
-2. **Implementar CSRF protection**
-3. **Usar HTTPS** en producción
-4. **Validar y sanitizar** todas las entradas
-5. **Implementar rate limiting**
-6. **Configurar headers de seguridad**
-
-## Desarrollo
-
-### Estructura MVC
-
-#### Controladores
-- Extienden la clase base `Controller`
-- Manejan la lógica de negocio
-- Validan datos de entrada
-- Renderizan vistas
-
-#### Modelos
-- Representan entidades de datos
-- Encapsulan lógica de base de datos
-- Proporcionan métodos CRUD
-
-#### Vistas
-- Archivos PHP con HTML/CSS/JS
-- Reciben datos de controladores
-- Implementan la interfaz de usuario
-
-### Agregar Nuevas Funcionalidades
-
-1. **Crear Controlador**
-   ```php
-   <?php
-   class NuevoController extends Controller {
-       public function index() {
-           $this->requireAuth();
-           $this->view('nuevo/index');
-       }
-   }
-   ```
-
-2. **Crear Modelo**
-   ```php
-   <?php
-   class Nuevo {
-       private $db;
-       
-       public function __construct() {
-           $this->db = Database::getInstance();
-       }
-   }
-   ```
-
-3. **Crear Vista**
-   ```php
-   <!-- app/views/nuevo/index.php -->
-   <?php include '../layout/header.php'; ?>
-   <div class="content">
-       <!-- Contenido de la vista -->
-   </div>
-   <?php include '../layout/footer.php'; ?>
-   ```
-
-## Monitoreo y Logs
-
-### Logs de Errores
-- Logs automáticos de errores PHP
-- Logs de errores de base de datos
-- Logs de conexiones MQTT
-
-### Métricas
-- Tiempo de respuesta de páginas
-- Uso de memoria
-- Conexiones de base de datos
-- Actividad de usuarios
-
-## Troubleshooting
-
-### Problemas Comunes
-
-1. **Error 500 - Internal Server Error**
-   - Verificar permisos de archivos
-   - Revisar logs de Apache/PHP
-   - Verificar configuración de base de datos
-
-2. **Página en blanco**
-   - Activar display_errors en PHP
-   - Verificar sintaxis de archivos PHP
-   - Revisar includes/requires
-
-3. **Error de conexión a base de datos**
-   - Verificar credenciales en `config/database.php`
-   - Verificar que MySQL esté ejecutándose
-   - Verificar permisos de usuario de base de datos
-
-4. **Problemas de sesión**
-   - Verificar configuración de sesiones PHP
-   - Limpiar cookies del navegador
-   - Verificar permisos de directorio de sesiones
-
-### Debug
-
+### Flutter API (Node.js)
 ```php
-// Activar debug en desarrollo
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-// Debug de variables
-var_dump($variable);
-print_r($array);
-
-// Debug de consultas SQL
-echo $sql;
-print_r($params);
+// Controlar dispositivo
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, 'http://localhost:3000/api/device/control');
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+    'device_serie' => $deviceSerie,
+    'action' => 'toggle'
+]));
+curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+$response = curl_exec($ch);
+curl_close($ch);
 ```
 
-## Contribución
+### Monitor Service (WebSocket)
+```javascript
+// Conectar al monitor de dispositivos
+const ws = new WebSocket('ws://localhost:8080');
+
+ws.onopen = function() {
+    // Suscribirse a dispositivos del usuario
+    ws.send(JSON.stringify({
+        type: 'subscribe_user_devices',
+        user_id: userId
+    }));
+};
+
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    if (data.type === 'device_status_update') {
+        updateDeviceStatus(data.device_serie, data.status);
+    }
+};
+```
+
+## 🧪 Testing
+
+### Tests Unitarios
+```bash
+# Ejecutar tests con PHPUnit
+vendor/bin/phpunit tests/
+
+# Test específico
+vendor/bin/phpunit tests/Controllers/AuthControllerTest.php
+
+# Con coverage
+vendor/bin/phpunit --coverage-html coverage/
+```
+
+### Tests de Integración
+```bash
+# Tests de base de datos
+php tests/integration/DatabaseTest.php
+
+# Tests de API
+php tests/integration/ApiIntegrationTest.php
+```
+
+## 📊 Monitoreo
+
+### Health Check
+```php
+// public/health.php
+header('Content-Type: application/json');
+
+try {
+    $db = new Database();
+    $db->query('SELECT 1');
+    
+    echo json_encode([
+        'status' => 'healthy',
+        'timestamp' => date('c'),
+        'services' => [
+            'database' => 'up',
+            'session' => session_status() === PHP_SESSION_ACTIVE ? 'up' : 'down'
+        ]
+    ]);
+} catch (Exception $e) {
+    http_response_code(503);
+    echo json_encode([
+        'status' => 'unhealthy',
+        'error' => $e->getMessage()
+    ]);
+}
+```
+
+### Logs
+```bash
+# Ver logs de Apache
+tail -f /var/log/apache2/smartlabs_error.log
+
+# Ver logs de la aplicación
+tail -f logs/app.log
+
+# Ver logs de acceso
+tail -f /var/log/apache2/smartlabs_access.log
+```
+
+## 🚀 Deployment
+
+### Producción
+```bash
+# Optimizar para producción
+composer install --no-dev --optimize-autoloader
+
+# Configurar permisos
+chmod -R 755 .
+chown -R www-data:www-data .
+chmod -R 777 logs/
+
+# Configurar SSL
+certbot --apache -d smartlabs.com
+```
+
+### Docker Compose
+```yaml
+services:
+  web:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      - DB_HOST=mariadb
+      - DB_NAME=emqx
+      - DB_USER=emqxuser
+      - DB_PASSWORD=emqxpass
+    depends_on:
+      - mariadb
+    volumes:
+      - ./logs:/var/www/html/logs
+```
+
+## 🔍 Debugging
+
+### Habilitar Debug
+```php
+// config/app.php
+'debug' => true,
+'log_level' => 'debug',
+'display_errors' => true
+```
+
+### Logs de Debug
+```php
+// Logging personalizado
+error_log("Debug: " . print_r($data, true));
+
+// Log de queries
+$db->enableQueryLog();
+$queries = $db->getQueryLog();
+```
+
+### Herramientas de Desarrollo
+```bash
+# Xdebug para debugging
+sudo apt-get install php-xdebug
+
+# Composer para dependencias
+curl -sS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+```
+
+## 📚 Documentación
+
+- 📖 **[Documentación Técnica Completa](docs/WEB_APPLICATION_DOCUMENTATION.md)**
+- 🏗️ **[Guía de Arquitectura](docs/ARCHITECTURE.md)**
+- 🔐 **[Guía de Seguridad](docs/SECURITY.md)**
+- 🚀 **[Guía de Deployment](docs/DEPLOYMENT.md)**
+
+## 🤝 Contribución
+
+1. Fork el proyecto
+2. Crear rama feature (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit cambios (`git commit -am 'Agregar nueva funcionalidad'`)
+4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+5. Crear Pull Request
 
 ### Estándares de Código
+- **PSR-12**: Estándar de codificación PHP
+- **Comentarios**: Documentar funciones complejas
+- **Naming**: CamelCase para clases, snake_case para variables
+- **Security**: Siempre sanitizar entrada de usuario
 
-1. **PSR-4** para autoloading
-2. **Camel Case** para métodos y variables
-3. **Pascal Case** para clases
-4. **Comentarios** en español
-5. **Indentación** de 4 espacios
+## 📞 Soporte
 
-### Proceso de Contribución
-
-1. Fork del repositorio
-2. Crear rama feature/bugfix
-3. Implementar cambios
-4. Probar funcionalidad
-5. Crear Pull Request
-6. Code review
-7. Merge a main
-
-## Licencia
-
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
-
-## Soporte
-
-Para obtener soporte:
-
-1. Revisar esta documentación
-2. Buscar en issues existentes
-3. Crear nuevo issue con detalles
-4. Contactar al equipo de desarrollo
+- **Email**: soporte@smartlabs.com
+- **Documentación**: [docs.smartlabs.com](https://docs.smartlabs.com)
+- **Issues**: [GitHub Issues](https://github.com/smartlabs/issues)
+- **Wiki**: [GitHub Wiki](https://github.com/smartlabs/wiki)
 
 ---
 
-**SMARTLABS Web Application** - Sistema de Gestión de Laboratorios Inteligentes
+**Versión**: 1.0.0  
+**Licencia**: MIT  
+**Mantenido por**: Equipo SmartLabs
