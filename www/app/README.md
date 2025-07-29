@@ -1,376 +1,489 @@
-# SMARTLABS - Sistema de Gestión de Laboratorio
+# SMARTLABS Web Application
 
 ## Descripción
 
-SMARTLABS es una aplicación web desarrollada en PHP que implementa un sistema de gestión integral para laboratorios. La aplicación utiliza una arquitectura MVC (Modelo-Vista-Controlador) y proporciona funcionalidades para la gestión de dispositivos IoT, control de acceso, préstamos de equipos, y monitoreo en tiempo real.
+**SMARTLABS Web Application** es una aplicación web PHP que implementa un sistema de gestión de laboratorios inteligentes. Utiliza una arquitectura MVC (Model-View-Controller) para gestionar usuarios, dispositivos, préstamos de equipos y monitoreo en tiempo real a través de MQTT y WebSocket.
 
 ## Características Principales
 
-- **Autenticación de usuarios** con sistema de sesiones
-- **Dashboard en tiempo real** con estadísticas de acceso
-- **Gestión de dispositivos IoT** con monitoreo de estado
-- **Control de acceso** con registro de tráfico
-- **Sistema de préstamos** de equipos de laboratorio
-- **Gestión de habitantes** y becarios
-- **Estadísticas avanzadas** con filtros por dispositivo
-- **Interfaz responsive** con Bootstrap
-- **API REST** para integración con sistemas externos
+### 🔐 Sistema de Autenticación
+- Login seguro con validación de credenciales
+- Gestión de sesiones de usuario
+- Control de acceso basado en roles
+
+### 📊 Dashboard Interactivo
+- Monitoreo en tiempo real de dispositivos
+- Estadísticas de uso y acceso
+- Visualización de datos históricos
+- Integración con sistemas externos
+
+### 🔧 Gestión de Dispositivos
+- Registro y administración de dispositivos IoT
+- Control remoto de equipos
+- Monitoreo de estado en tiempo real
+- Historial de actividad
+
+### 👥 Gestión de Usuarios
+- Administración de habitantes/usuarios del laboratorio
+- Gestión de becarios y permisos
+- Registro de actividades por usuario
+
+### 📦 Sistema de Préstamos
+- Gestión de préstamos de equipos
+- Control de inventario
+- Historial de préstamos
+- Notificaciones automáticas
+
+### 📈 Estadísticas y Reportes
+- Análisis de uso de dispositivos
+- Reportes de actividad por usuario
+- Métricas de rendimiento del laboratorio
 
 ## Tecnologías Utilizadas
 
-- **Backend**: PHP 7.4+
-- **Base de datos**: MySQL/MariaDB
-- **Frontend**: HTML5, CSS3, JavaScript, Bootstrap
-- **Servidor web**: Apache con mod_rewrite
-- **Arquitectura**: MVC personalizada
-- **Autenticación**: Sesiones PHP con SHA1
+### Backend
+- **PHP 7.4+**: Lenguaje principal del servidor
+- **MySQL 8.0**: Base de datos principal
+- **MySQLi**: Driver de base de datos
+- **Arquitectura MVC**: Patrón de diseño
+
+### Frontend
+- **HTML5/CSS3**: Estructura y estilos
+- **JavaScript ES6+**: Funcionalidad del cliente
+- **Bootstrap**: Framework CSS
+- **Font Awesome**: Iconografía
+- **jQuery**: Manipulación del DOM
+
+### Comunicación
+- **MQTT**: Protocolo de mensajería IoT
+- **WebSocket**: Comunicación en tiempo real
+- **AJAX**: Comunicación asíncrona
+- **JSON**: Formato de intercambio de datos
 
 ## Estructura del Proyecto
 
 ```
-c:\laragon\www\
-├── app/                          # Aplicación principal
-│   ├── controllers/              # Controladores MVC
-│   │   ├── AuthController.php    # Autenticación
-│   │   ├── DashboardController.php # Dashboard principal
-│   │   ├── DeviceController.php  # Gestión de dispositivos
-│   │   ├── HabitantController.php # Gestión de habitantes
-│   │   ├── LoanController.php    # Sistema de préstamos
-│   │   └── ...
-│   ├── core/                     # Núcleo del framework
-│   │   ├── Controller.php        # Controlador base
-│   │   ├── Database.php          # Conexión a BD
-│   │   ├── Router.php            # Enrutador
-│   │   └── autoload.php          # Cargador automático
-│   ├── models/                   # Modelos de datos
-│   │   ├── User.php              # Modelo de usuarios
-│   │   ├── Device.php            # Modelo de dispositivos
-│   │   ├── Traffic.php           # Modelo de tráfico
-│   │   └── ...
-│   └── views/                    # Vistas de la aplicación
-│       ├── auth/                 # Vistas de autenticación
-│       ├── dashboard/            # Vistas del dashboard
-│       ├── layout/               # Plantillas base
-│       └── ...
-├── config/                       # Configuración
-│   ├── app.php                   # Configuración general
-│   └── database.php              # Configuración de BD
-├── public/                       # Archivos públicos
-│   ├── css/                      # Hojas de estilo
-│   ├── js/                       # Scripts JavaScript
-│   ├── images/                   # Imágenes
-│   └── index.php                 # Punto de entrada alternativo
-├── .htaccess                     # Configuración Apache
-└── index.php                     # Controlador frontal
+c:\laragon\www/
+├── index.php                    # Punto de entrada principal
+├── README.md                    # Este archivo
+├── .htaccess                   # Configuración Apache
+├── app/                        # Aplicación principal
+│   ├── controllers/            # Controladores MVC
+│   │   ├── AuthController.php
+│   │   ├── DashboardController.php
+│   │   ├── DeviceController.php
+│   │   ├── EquipmentController.php
+│   │   ├── HabitantController.php
+│   │   ├── LoanController.php
+│   │   └── StatsController.php
+│   ├── core/                   # Núcleo del framework
+│   │   ├── Controller.php      # Clase base de controladores
+│   │   ├── Database.php        # Gestión de base de datos
+│   │   ├── Router.php          # Enrutador de URLs
+│   │   └── autoload.php        # Cargador automático
+│   ├── models/                 # Modelos de datos
+│   │   ├── User.php
+│   │   ├── Device.php
+│   │   ├── Equipment.php
+│   │   ├── Habitant.php
+│   │   ├── Loan.php
+│   │   └── Traffic.php
+│   └── views/                  # Vistas de la aplicación
+│       ├── auth/
+│       ├── dashboard/
+│       ├── device/
+│       ├── equipment/
+│       ├── habitant/
+│       ├── layout/
+│       ├── loan/
+│       └── stats/
+├── config/                     # Configuraciones
+│   ├── app.php                # Configuración de la aplicación
+│   └── database.php           # Configuración de base de datos
+├── public/                     # Archivos públicos
+│   ├── index.php              # Punto de entrada alternativo
+│   ├── js/                    # JavaScript del cliente
+│   │   ├── config.js
+│   │   ├── mqtt-client.js
+│   │   ├── device-status-websocket.js
+│   │   └── [otros archivos JS]
+│   └── audio/                 # Archivos de audio
+├── assets/                     # Recursos estáticos
+│   ├── bootstrap/
+│   ├── font-awesome/
+│   ├── images/
+│   └── styles/
+├── libs/                       # Librerías externas
+│   ├── jquery/
+│   ├── angular/
+│   └── mqtt/
+└── views/                      # Vistas adicionales
+    ├── app/
+    ├── blocks/
+    ├── chart/
+    └── ui/
 ```
 
 ## Instalación
 
-### Requisitos del Sistema
+### Prerrequisitos
 
-- PHP 7.4 o superior
-- MySQL 5.7 o MariaDB 10.3+
-- Apache con mod_rewrite habilitado
-- Extensiones PHP: mysqli, session, json
+- **PHP 7.4 o superior**
+- **MySQL 8.0 o superior**
+- **Apache/Nginx** con mod_rewrite habilitado
+- **Composer** (opcional, para dependencias futuras)
 
 ### Pasos de Instalación
 
 1. **Clonar o descargar el proyecto**
    ```bash
-   git clone <repository-url> c:\laragon\www
+   git clone <repository-url>
+   cd smartlabs-web-app
    ```
 
-2. **Configurar la base de datos**
-   - Editar `config/database.php` con las credenciales correctas
-   - Importar el esquema de base de datos
-
-3. **Configurar Apache**
+2. **Configurar el servidor web**
+   - Configurar el document root hacia `c:\laragon\www`
    - Asegurar que mod_rewrite esté habilitado
-   - El archivo `.htaccess` ya está configurado
+   - Configurar permisos de escritura en directorios necesarios
 
-4. **Configurar la aplicación**
-   - Editar `config/app.php` según el entorno
-   - Configurar la URL base de la aplicación
+3. **Configurar la base de datos**
+   ```sql
+   CREATE DATABASE emqx CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   CREATE USER 'smartlabs'@'localhost' IDENTIFIED BY 'password';
+   GRANT ALL PRIVILEGES ON emqx.* TO 'smartlabs'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
 
-5. **Verificar permisos**
-   - Asegurar permisos de lectura/escritura en directorios necesarios
+4. **Configurar archivos de configuración**
+   
+   Editar `config/database.php`:
+   ```php
+   <?php
+   return [
+       'host' => 'localhost',
+       'username' => 'smartlabs',
+       'password' => 'password',
+       'database' => 'emqx',
+       'port' => '3306',
+       'charset' => 'utf8mb4'
+   ];
+   ```
+   
+   Editar `config/app.php`:
+   ```php
+   <?php
+   return [
+       'app_name' => 'SMARTLABS',
+       'app_url' => 'http://localhost',
+       'default_controller' => 'Dashboard',
+       'default_action' => 'index',
+       'assets_path' => '/assets/',
+       'session_timeout' => 3600
+   ];
+   ```
+
+5. **Importar esquema de base de datos**
+   ```bash
+   mysql -u smartlabs -p emqx < database/schema.sql
+   ```
+
+6. **Configurar permisos**
+   ```bash
+   chmod -R 755 app/
+   chmod -R 644 config/
+   ```
 
 ## Configuración
 
-### Configuración de la Aplicación (`config/app.php`)
+### Base de Datos
 
-```php
-return [
-    'app_name' => 'SMARTLABS',
-    'app_url' => 'http://localhost',
-    'default_controller' => 'Dashboard',
-    'default_action' => 'index',
-    'assets_path' => '/public',
-    'session_timeout' => 3600
-];
+La aplicación utiliza dos conexiones de base de datos:
+
+1. **Base de datos principal** (configurada en `config/database.php`)
+   - Usuarios, dispositivos, préstamos
+   - Configuración de la aplicación
+
+2. **Base de datos externa** (hardcodeada en controladores)
+   - Datos de tráfico y actividad en tiempo real
+   - Integración con sistemas IoT
+
+### MQTT
+
+Configuración en `public/js/config.js`:
+```javascript
+mqtt: {
+    brokerUrl: 'ws://localhost:8083/mqtt',
+    username: 'jose',
+    password: 'public',
+    clientId: 'iotmc' + Math.random().toString(16).substr(2, 8),
+    topics: {
+        deviceStatus: 'smartlabs/devices/+/status',
+        deviceRfid: 'smartlabs/devices/+/rfid',
+        deviceControl: 'smartlabs/devices/+/control'
+    }
+}
 ```
 
-### Configuración de Base de Datos (`config/database.php`)
+### Sesiones
 
-```php
-return [
-    'host' => 'localhost',
-    'username' => 'root',
-    'password' => '',
-    'database' => 'smartlabs',
-    'port' => 3306,
-    'charset' => 'utf8mb4'
-];
-```
+La aplicación utiliza sesiones PHP nativas:
+- Timeout configurable en `config/app.php`
+- Validación automática en cada request
+- Redirección automática al login si no está autenticado
 
 ## Uso
 
-### Autenticación
+### Acceso a la Aplicación
 
-1. **Acceder al sistema**: `http://localhost/Auth/login`
-2. **Registrar nuevo usuario**: `http://localhost/Auth/register`
-3. **Cerrar sesión**: `http://localhost/Auth/logout`
+1. **URL Principal**: `http://localhost/`
+2. **Login**: `http://localhost/Auth/login`
+3. **Dashboard**: `http://localhost/Dashboard` (requiere autenticación)
 
-### Dashboard Principal
+### Rutas Principales
 
-- **URL**: `http://localhost/Dashboard`
-- **Funcionalidades**:
-  - Visualización de dispositivos del usuario
-  - Estadísticas en tiempo real
-  - Tráfico de acceso por dispositivo
-  - Gráficos y métricas
+| Ruta | Controlador | Descripción |
+|------|-------------|-------------|
+| `/` | Dashboard | Página principal |
+| `/Auth/login` | Auth | Página de login |
+| `/Dashboard` | Dashboard | Panel principal |
+| `/Device` | Device | Gestión de dispositivos |
+| `/Equipment` | Equipment | Gestión de equipos |
+| `/Habitant` | Habitant | Gestión de usuarios |
+| `/Loan` | Loan | Gestión de préstamos |
+| `/Stats` | Stats | Estadísticas y reportes |
 
-### Gestión de Dispositivos
+### API Endpoints
 
-- **Listar dispositivos**: `http://localhost/Device`
-- **Agregar dispositivo**: Formulario en la vista de dispositivos
-- **Editar/Eliminar**: Acciones disponibles en la lista
+La aplicación expone varios endpoints AJAX:
 
-## Arquitectura MVC
+```javascript
+// Ejemplos de uso
+fetch('/Dashboard/getDeviceStatus', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: 'device001' })
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
 
-### Controladores
+## Esquema de Base de Datos
 
-Los controladores manejan la lógica de la aplicación y coordinan entre modelos y vistas:
-
-- **AuthController**: Maneja autenticación y registro
-- **DashboardController**: Dashboard principal con estadísticas
-- **DeviceController**: CRUD de dispositivos
-- **HabitantController**: Gestión de habitantes
-- **LoanController**: Sistema de préstamos
-
-### Modelos
-
-Los modelos representan la lógica de datos y la interacción con la base de datos:
-
-- **User**: Gestión de usuarios y autenticación
-- **Device**: Operaciones con dispositivos IoT
-- **Traffic**: Registro de accesos y tráfico
-- **Habitant**: Información de habitantes del laboratorio
-- **Loan**: Sistema de préstamos de equipos
-
-### Vistas
-
-Las vistas presentan la información al usuario:
-
-- **Layout**: Plantillas base (header, footer, sidebar)
-- **Auth**: Formularios de login y registro
-- **Dashboard**: Interfaz principal con estadísticas
-- **Device**: Gestión de dispositivos
-- **Habitant**: Gestión de habitantes
-
-## Base de Datos
-
-### Tablas Principales
-
-- **users**: Usuarios del sistema
-- **devices**: Dispositivos IoT registrados
-- **traffic**: Registro de accesos a dispositivos
-- **habintants**: Habitantes del laboratorio
-- **equipment**: Equipos disponibles para préstamo
-- **loans**: Préstamos de equipos
-- **becarios**: Información de becarios
-
-### Esquema de Usuarios
-
+### Tabla: users
 ```sql
 CREATE TABLE users (
     users_id INT AUTO_INCREMENT PRIMARY KEY,
-    users_email VARCHAR(255) UNIQUE NOT NULL,
+    users_email VARCHAR(100) UNIQUE NOT NULL,
     users_password VARCHAR(255) NOT NULL,
     users_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-### Esquema de Dispositivos
-
+### Tabla: devices
 ```sql
 CREATE TABLE devices (
     devices_id INT AUTO_INCREMENT PRIMARY KEY,
-    devices_alias VARCHAR(255) NOT NULL,
-    devices_serie VARCHAR(255) UNIQUE NOT NULL,
-    devices_user_id INT NOT NULL,
+    devices_alias VARCHAR(100) NOT NULL,
+    devices_serie VARCHAR(50) UNIQUE NOT NULL,
+    devices_user_id INT,
     devices_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (devices_user_id) REFERENCES users(users_id)
 );
 ```
 
-## API Endpoints
+### Tabla: habintants (Base de datos externa)
+```sql
+CREATE TABLE habintants (
+    hab_id INT AUTO_INCREMENT PRIMARY KEY,
+    hab_name VARCHAR(100) NOT NULL,
+    hab_registration VARCHAR(20) UNIQUE,
+    hab_email VARCHAR(100),
+    hab_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
-### Autenticación
-
-- `POST /Auth/login` - Iniciar sesión
-- `POST /Auth/register` - Registrar usuario
-- `GET /Auth/logout` - Cerrar sesión
-
-### Dashboard
-
-- `GET /Dashboard` - Dashboard principal
-- `GET /Dashboard/refresh` - Actualizar datos (AJAX)
-- `GET /Dashboard/stats` - Estadísticas en tiempo real
-
-### Dispositivos
-
-- `GET /Device` - Listar dispositivos
-- `POST /Device/create` - Crear dispositivo
-- `PUT /Device/update/{id}` - Actualizar dispositivo
-- `DELETE /Device/delete/{id}` - Eliminar dispositivo
+### Tabla: traffic (Base de datos externa)
+```sql
+CREATE TABLE traffic (
+    traffic_id INT AUTO_INCREMENT PRIMARY KEY,
+    traffic_device VARCHAR(50) NOT NULL,
+    traffic_state TINYINT NOT NULL,
+    traffic_date DATETIME NOT NULL,
+    traffic_hab_id INT,
+    FOREIGN KEY (traffic_hab_id) REFERENCES habintants(hab_id)
+);
+```
 
 ## Seguridad
 
 ### Medidas Implementadas
 
-- **Autenticación por sesiones** con timeout configurable
-- **Sanitización de datos** en todos los inputs
-- **Validación de email** en formularios
-- **Protección CSRF** en formularios críticos
-- **Escape de datos** en las vistas
-- **Conexión segura** a base de datos con prepared statements
+1. **Autenticación**
+   - Hash SHA1 para contraseñas (recomendado migrar a bcrypt)
+   - Validación de sesiones en cada request
+   - Timeout automático de sesiones
 
-### Recomendaciones Adicionales
+2. **Validación de Datos**
+   - Sanitización de inputs en controladores
+   - Prepared statements para consultas SQL
+   - Validación de tipos de datos
 
-- Migrar de SHA1 a bcrypt para passwords
-- Implementar HTTPS en producción
-- Configurar headers de seguridad
-- Implementar rate limiting
-- Logs de seguridad y auditoría
+3. **Control de Acceso**
+   - Verificación de autenticación en controladores protegidos
+   - Redirección automática a login
+   - Separación de rutas públicas y privadas
+
+### Recomendaciones de Seguridad
+
+1. **Migrar a bcrypt** para hash de contraseñas
+2. **Implementar CSRF protection**
+3. **Usar HTTPS** en producción
+4. **Validar y sanitizar** todas las entradas
+5. **Implementar rate limiting**
+6. **Configurar headers de seguridad**
 
 ## Desarrollo
 
-### Agregar un Nuevo Controlador
+### Estructura MVC
 
-1. Crear archivo en `app/controllers/`
-2. Extender de la clase `Controller`
-3. Implementar métodos de acción
-4. Crear vistas correspondientes
+#### Controladores
+- Extienden la clase base `Controller`
+- Manejan la lógica de negocio
+- Validan datos de entrada
+- Renderizan vistas
 
-```php
-<?php
-require_once __DIR__ . '/../core/Controller.php';
+#### Modelos
+- Representan entidades de datos
+- Encapsulan lógica de base de datos
+- Proporcionan métodos CRUD
 
-class MiControlador extends Controller {
-    public function __construct() {
-        parent::__construct();
-        $this->requireAuth(); // Si requiere autenticación
-    }
-    
-    public function index() {
-        $this->view('mi_vista/index', $data);
-    }
-}
-```
+#### Vistas
+- Archivos PHP con HTML/CSS/JS
+- Reciben datos de controladores
+- Implementan la interfaz de usuario
 
-### Agregar un Nuevo Modelo
+### Agregar Nuevas Funcionalidades
 
-1. Crear archivo en `app/models/`
-2. Implementar métodos de acceso a datos
-3. Usar la instancia de Database
+1. **Crear Controlador**
+   ```php
+   <?php
+   class NuevoController extends Controller {
+       public function index() {
+           $this->requireAuth();
+           $this->view('nuevo/index');
+       }
+   }
+   ```
 
-```php
-<?php
-class MiModelo {
-    private $db;
-    
-    public function __construct() {
-        $this->db = Database::getInstance();
-    }
-    
-    public function getAll() {
-        return $this->db->query("SELECT * FROM mi_tabla");
-    }
-}
-```
+2. **Crear Modelo**
+   ```php
+   <?php
+   class Nuevo {
+       private $db;
+       
+       public function __construct() {
+           $this->db = Database::getInstance();
+       }
+   }
+   ```
+
+3. **Crear Vista**
+   ```php
+   <!-- app/views/nuevo/index.php -->
+   <?php include '../layout/header.php'; ?>
+   <div class="content">
+       <!-- Contenido de la vista -->
+   </div>
+   <?php include '../layout/footer.php'; ?>
+   ```
 
 ## Monitoreo y Logs
 
-### Logs del Sistema
+### Logs de Errores
+- Logs automáticos de errores PHP
+- Logs de errores de base de datos
+- Logs de conexiones MQTT
 
-- Logs de Apache: `/var/log/apache2/`
-- Logs de PHP: Configurar en `php.ini`
-- Logs de aplicación: Implementar logging personalizado
-
-### Métricas Importantes
-
+### Métricas
 - Tiempo de respuesta de páginas
-- Errores de base de datos
-- Intentos de login fallidos
-- Uso de memoria y CPU
+- Uso de memoria
+- Conexiones de base de datos
+- Actividad de usuarios
 
 ## Troubleshooting
 
 ### Problemas Comunes
 
 1. **Error 500 - Internal Server Error**
-   - Verificar logs de Apache
-   - Comprobar permisos de archivos
-   - Validar sintaxis PHP
+   - Verificar permisos de archivos
+   - Revisar logs de Apache/PHP
+   - Verificar configuración de base de datos
 
-2. **Problemas de conexión a BD**
+2. **Página en blanco**
+   - Activar display_errors en PHP
+   - Verificar sintaxis de archivos PHP
+   - Revisar includes/requires
+
+3. **Error de conexión a base de datos**
    - Verificar credenciales en `config/database.php`
-   - Comprobar que MySQL esté ejecutándose
-   - Validar permisos de usuario de BD
+   - Verificar que MySQL esté ejecutándose
+   - Verificar permisos de usuario de base de datos
 
-3. **URLs no funcionan (404)**
-   - Verificar que mod_rewrite esté habilitado
-   - Comprobar archivo `.htaccess`
-   - Validar configuración de VirtualHost
+4. **Problemas de sesión**
+   - Verificar configuración de sesiones PHP
+   - Limpiar cookies del navegador
+   - Verificar permisos de directorio de sesiones
 
-4. **Sesiones no persisten**
-   - Verificar configuración de sesiones en PHP
-   - Comprobar permisos del directorio de sesiones
-   - Validar configuración de cookies
+### Debug
+
+```php
+// Activar debug en desarrollo
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Debug de variables
+var_dump($variable);
+print_r($array);
+
+// Debug de consultas SQL
+echo $sql;
+print_r($params);
+```
 
 ## Contribución
 
 ### Estándares de Código
 
-- Seguir PSR-1 y PSR-2 para estilo de código
-- Documentar funciones y clases
-- Usar nombres descriptivos para variables y métodos
-- Implementar manejo de errores apropiado
+1. **PSR-4** para autoloading
+2. **Camel Case** para métodos y variables
+3. **Pascal Case** para clases
+4. **Comentarios** en español
+5. **Indentación** de 4 espacios
 
-### Proceso de Desarrollo
+### Proceso de Contribución
 
-1. Crear rama para nueva funcionalidad
-2. Implementar cambios con tests
-3. Documentar cambios
-4. Crear pull request
-5. Revisión de código
-6. Merge a rama principal
+1. Fork del repositorio
+2. Crear rama feature/bugfix
+3. Implementar cambios
+4. Probar funcionalidad
+5. Crear Pull Request
+6. Code review
+7. Merge a main
 
 ## Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver archivo `LICENSE` para más detalles.
+Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
 
 ## Soporte
 
-Para soporte técnico o reportar bugs:
+Para obtener soporte:
 
-- **Email**: soporte@smartlabs.com
-- **Documentación**: Ver archivos en `/app/docs/`
-- **Issues**: Usar el sistema de issues del repositorio
+1. Revisar esta documentación
+2. Buscar en issues existentes
+3. Crear nuevo issue con detalles
+4. Contactar al equipo de desarrollo
 
 ---
 
-**Versión**: 2.0.0  
-**Última actualización**: Diciembre 2024  
-**Mantenido por**: Equipo SMARTLABS
+**SMARTLABS Web Application** - Sistema de Gestión de Laboratorios Inteligentes

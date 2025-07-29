@@ -2,137 +2,115 @@
 
 ## Descripción
 
-API REST para aplicación Flutter de control de equipos SMARTLABS. Esta API permite gestionar usuarios, dispositivos IoT y préstamos de equipos a través de comunicación MQTT y base de datos MySQL.
+API REST para aplicación Flutter de control de equipos SMARTLABS. Esta API proporciona funcionalidades para el manejo de usuarios, dispositivos IoT y préstamos de equipos en un entorno de laboratorio inteligente.
 
-## Características
+## Características Principales
 
-- 🔐 **Autenticación opcional** con JWT
-- 📡 **Comunicación MQTT** para dispositivos IoT
-- 🗄️ **Base de datos MySQL** con fallback automático
-- 🛡️ **Seguridad** con Helmet y Rate Limiting
-- 🌐 **CORS** configurado para Flutter
-- 📝 **Validación** de datos con Joi
-- 🔄 **Reconexión automática** MQTT y BD
+- 🔐 **Autenticación por API Key**
+- 📱 **Integración con Flutter**
+- 🏠 **Comunicación MQTT con dispositivos IoT**
+- 📊 **Base de datos MySQL**
+- 🔄 **Sistema de préstamos de equipos**
+- 📈 **Historial de uso y accesos**
+- 🛡️ **Middleware de seguridad**
 
-## Tecnologías
+## Tecnologías Utilizadas
 
-- **Node.js** + **Express.js**
-- **MySQL2** para base de datos
-- **MQTT.js** para comunicación IoT
-- **Joi** para validación
-- **Helmet** para seguridad
-- **CORS** para cross-origin
+- **Node.js** - Runtime de JavaScript
+- **Express.js** - Framework web
+- **MySQL2** - Cliente de base de datos
+- **MQTT** - Protocolo de comunicación IoT
+- **Joi** - Validación de datos
+- **Helmet** - Seguridad HTTP
+- **CORS** - Cross-Origin Resource Sharing
+- **dotenv** - Gestión de variables de entorno
 
 ## Instalación
 
-### 1. Clonar el repositorio
-```bash
-git clone <repository-url>
-cd flutter-api
-```
+### Prerrequisitos
 
-### 2. Instalar dependencias
-```bash
-npm install
-```
+- Node.js (v14 o superior)
+- MySQL Server
+- Broker MQTT (EMQX recomendado)
 
-### 3. Configurar variables de entorno
-```bash
-cp .env.example .env
-```
+### Pasos de Instalación
 
-Editar `.env` con tus configuraciones:
+1. **Clonar el repositorio**
+   ```bash
+   git clone <repository-url>
+   cd flutter-api
+   ```
 
-```env
-# Servidor
-PORT=3000
-NODE_ENV=development
+2. **Instalar dependencias**
+   ```bash
+   npm install
+   ```
 
-# Base de Datos MySQL
-DB_HOST=localhost
-DB_USER=admin_iotcurso
-DB_PASSWORD=tu_password_aqui
-DB_NAME=smartlabs
-DB_PORT=3306
+3. **Configurar variables de entorno**
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Editar el archivo `.env` con tus configuraciones:
+   ```env
+   # Configuración del Servidor
+   PORT=3000
+   NODE_ENV=development
+   
+   # Base de Datos MySQL
+   DB_HOST=localhost
+   DB_USER=tu_usuario
+   DB_PASSWORD=tu_password
+   DB_NAME=smartlabs
+   DB_PORT=3306
+   
+   # MQTT Broker
+   MQTT_HOST=192.168.0.100
+   MQTT_PORT=1883
+   MQTT_USERNAME=admin
+   MQTT_PASSWORD=public
+   MQTT_CLIENT_ID=flutter_api_client
+   ```
 
-# MQTT Broker
-MQTT_HOST=192.168.0.100
-MQTT_PORT=1883
-MQTT_USERNAME=admin
-MQTT_PASSWORD=public
-MQTT_CLIENT_ID=flutter_api_client
-
-# Autenticación (Opcional)
-JWT_SECRET=tu_jwt_secret_aqui
-JWT_EXPIRES_IN=24h
-```
-
-### 4. Ejecutar la aplicación
-
-**Desarrollo:**
-```bash
-npm run dev
-```
-
-**Producción:**
-```bash
-npm start
-```
+4. **Iniciar la aplicación**
+   ```bash
+   # Desarrollo
+   npm run dev
+   
+   # Producción
+   npm start
+   ```
 
 ## Estructura del Proyecto
 
 ```
 src/
 ├── config/
-│   ├── database.js      # Configuración MySQL con fallback
-│   └── mqtt.js          # Configuración MQTT
+│   ├── database.js      # Configuración de MySQL
+│   └── mqtt.js          # Configuración de MQTT
 ├── controllers/
-│   ├── deviceController.js    # Control de dispositivos
-│   ├── prestamoController.js  # Control de préstamos
-│   └── userController.js      # Gestión de usuarios
+│   ├── userController.js     # Controlador de usuarios
+│   ├── deviceController.js   # Controlador de dispositivos
+│   └── prestamoController.js # Controlador de préstamos
 ├── middleware/
-│   ├── auth.js          # Autenticación JWT opcional
+│   ├── auth.js          # Middleware de autenticación
 │   └── errorHandler.js  # Manejo de errores
 ├── routes/
+│   ├── userRoutes.js    # Rutas de usuarios
 │   ├── deviceRoutes.js  # Rutas de dispositivos
-│   ├── internalRoutes.js # Rutas internas
 │   ├── prestamoRoutes.js # Rutas de préstamos
-│   └── userRoutes.js    # Rutas de usuarios
+│   └── internalRoutes.js # Rutas internas
 ├── services/
-│   ├── deviceService.js       # Lógica de dispositivos
-│   ├── mqttListenerService.js # Listener MQTT para hardware
-│   ├── prestamoService.js     # Lógica de préstamos
-│   └── userService.js         # Lógica de usuarios
-└── index.js             # Punto de entrada
+│   ├── userService.js        # Lógica de negocio de usuarios
+│   ├── deviceService.js      # Lógica de negocio de dispositivos
+│   ├── prestamoService.js    # Lógica de negocio de préstamos
+│   └── mqttListenerService.js # Servicio de escucha MQTT
+└── index.js             # Punto de entrada de la aplicación
 ```
 
 ## API Endpoints
 
-### 🏥 Health Check
-
-#### `GET /health`
-Verifica el estado de la API.
-
-**Respuesta:**
-```json
-{
-  "success": true,
-  "message": "SMARTLABS Flutter API funcionando correctamente",
-  "data": {
-    "status": "healthy",
-    "timestamp": "2024-01-01T00:00:00.000Z",
-    "version": "1.0.0",
-    "environment": "development"
-  }
-}
-```
-
-### 📋 Información de la API
-
-#### `GET /api`
-Obtiene información general y documentación de endpoints.
-
-### 👥 Usuarios
+### Usuarios
 
 #### `GET /api/users/registration/:registration`
 Obtiene un usuario por matrícula.
@@ -140,7 +118,7 @@ Obtiene un usuario por matrícula.
 **Parámetros:**
 - `registration` (string): Matrícula del usuario
 
-**Respuesta exitosa:**
+**Respuesta:**
 ```json
 {
   "success": true,
@@ -148,10 +126,10 @@ Obtiene un usuario por matrícula.
   "data": {
     "id": 1,
     "name": "Juan Pérez",
-    "registration": "A01234567",
-    "email": "juan.perez@tec.mx",
-    "cards_number": "1234567890",
-    "device_id": null
+    "registration": "12345",
+    "email": "juan@example.com",
+    "cards_number": "ABCD1234",
+    "device_id": "DEV001"
   }
 }
 ```
@@ -160,22 +138,18 @@ Obtiene un usuario por matrícula.
 Obtiene un usuario por RFID.
 
 **Parámetros:**
-- `rfid` (string): Número RFID del usuario
+- `rfid` (string): Código RFID del usuario
 
 #### `GET /api/users/registration/:registration/history`
 Obtiene el historial de acceso de un usuario.
 
-**Parámetros:**
-- `registration` (string): Matrícula del usuario
-- `limit` (query, opcional): Límite de registros (default: 10, max: 100)
+**Query Parameters:**
+- `limit` (number, opcional): Límite de registros (default: 10, max: 100)
 
 #### `GET /api/users/validate/:registration`
 Valida si un usuario existe.
 
-**Parámetros:**
-- `registration` (string): Matrícula del usuario
-
-### 🔧 Dispositivos
+### Dispositivos
 
 #### `POST /api/devices/control`
 Controla un dispositivo (encender/apagar).
@@ -183,8 +157,8 @@ Controla un dispositivo (encender/apagar).
 **Body:**
 ```json
 {
-  "registration": "A01234567",
-  "device_serie": "SMART10001",
+  "registration": "12345",
+  "device_serie": "DEV001",
   "action": 1
 }
 ```
@@ -194,225 +168,105 @@ Controla un dispositivo (encender/apagar).
 - `device_serie` (string): Serie del dispositivo
 - `action` (number): 0 = apagar, 1 = encender
 
-**Respuesta exitosa:**
-```json
-{
-  "success": true,
-  "message": "Dispositivo encendido exitosamente",
-  "data": {
-    "action": "on",
-    "state": 1,
-    "device": {
-      "serie": "SMART10001",
-      "alias": "Dispositivo Lab 1"
-    },
-    "user": {
-      "name": "Juan Pérez"
-    },
-    "timestamp": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
 #### `GET /api/devices/:device_serie`
-Obtiene información de un dispositivo.
-
-**Parámetros:**
-- `device_serie` (string): Serie del dispositivo
+Obtiene información de un dispositivo por su serie.
 
 #### `GET /api/devices/:device_serie/history`
 Obtiene el historial de uso de un dispositivo.
 
-**Parámetros:**
-- `device_serie` (string): Serie del dispositivo
-- `limit` (query, opcional): Límite de registros (default: 20, max: 100)
+**Query Parameters:**
+- `limit` (number, opcional): Límite de registros (default: 20, max: 100)
 
 #### `GET /api/devices/:device_serie/status`
 Obtiene el estado actual de un dispositivo.
 
-#### `GET /api/devices`
-Lista todos los dispositivos disponibles.
+#### `GET /api/devices/`
+Obtiene todos los dispositivos disponibles.
 
-### 📦 Préstamos
+### Préstamos
 
-#### `POST /api/prestamo/control`
-Controla un préstamo de dispositivo manualmente.
+#### `POST /api/prestamos/control`
+Controla un dispositivo de préstamo.
 
 **Body:**
 ```json
 {
-  "registration": "A01234567",
-  "device_serie": "SMART10001",
+  "registration": "12345",
+  "device_serie": "DEV001",
   "action": 1
 }
 ```
 
-### 📡 MQTT
+#### `POST /api/prestamos/prestar`
+Realiza un préstamo de equipo.
 
-#### `GET /api/mqtt/status`
-Obtiene el estado del MQTT Listener para hardware.
+#### `POST /api/prestamos/simular-dispositivo`
+Simula el comportamiento del dispositivo físico.
 
-**Respuesta:**
-```json
-{
-  "success": true,
-  "data": {
-    "mqtt_listener": {
-      "active": true,
-      "session": {
-        "active": false,
-        "user": null,
-        "count": 0
-      }
-    }
-  }
-}
-```
-
-#### `POST /api/mqtt/control`
-Controla el MQTT Listener (iniciar/detener).
-
-**Body:**
-```json
-{
-  "action": "start"
-}
-```
-
-**Acciones disponibles:**
-- `start`: Inicia el listener MQTT
-- `stop`: Detiene el listener MQTT
-
-### 🔒 Rutas Internas
-
-#### `POST /api/internal/loan-session`
-Notifica sesión de préstamo (uso interno).
-
-#### `GET /api/internal/status`
-Obtiene el estado del sistema interno.
+#### `GET /api/prestamos/estado-sesion`
+Obtiene el estado actual de la sesión de préstamos.
 
 ## Comunicación MQTT
 
-### Tópicos Soportados
+La API incluye un servicio de escucha MQTT que maneja las comunicaciones con los dispositivos IoT del laboratorio.
 
-La API escucha los siguientes tópicos MQTT del hardware:
+### Tópicos MQTT
 
-- `+/loan_queryu`: Consultas de usuario para préstamos
-- `+/loan_querye`: Consultas de equipo para préstamos
-- `+/access_query`: Consultas de acceso
-- `+/scholar_query`: Consultas de becarios
-- `values`: Datos de sensores
+- `SMART*/loan_queryu` - Consultas de usuario
+- `SMART*/loan_querye` - Consultas de equipo
+- `SMART*/access_query` - Consultas de acceso
+- `SMART*/scholar_query` - Consultas de becarios
+- `SMART*/sensor_data` - Datos de sensores
 
-### Formato de Mensajes
+### Configuración MQTT
 
-**Consulta de usuario (loan_queryu):**
+La configuración MQTT se realiza a través de variables de entorno:
+
+```env
+MQTT_HOST=192.168.0.100
+MQTT_PORT=1883
+MQTT_USERNAME=admin
+MQTT_PASSWORD=public
+MQTT_CLIENT_ID=flutter_api_client
 ```
-Tópico: SMART10001/loan_queryu
-Mensaje: 1234567890
-```
-
-**Respuesta del dispositivo:**
-```
-Tópico: SMART10001/loan_response
-Mensaje: Juan Pérez,1
-```
-
-## Seguridad
-
-### Rate Limiting
-- **Ventana:** 15 minutos
-- **Límite:** 100 requests por IP
-- **Aplica a:** Todas las rutas `/api/*`
-
-### CORS
-Configurado para permitir:
-- `localhost` en puertos comunes (3000, 3001, 8080, 5000)
-- `127.0.0.1` en puertos comunes
-- Patrones dinámicos para desarrollo
-
-### Headers de Seguridad
-- **Helmet.js** configurado
-- **Cross-Origin Resource Policy:** cross-origin
 
 ## Base de Datos
 
-### Configuración con Fallback
+La API utiliza MySQL como base de datos principal. La configuración incluye:
 
-La API soporta configuración dual:
-1. **Base de datos principal** (remota)
-2. **Base de datos fallback** (local)
-
-Si la conexión principal falla, automáticamente usa el fallback.
+- Conexión principal con fallback automático
+- Pool de conexiones para mejor rendimiento
+- Manejo de reconexión automática
+- Charset UTF8MB4 para soporte completo de Unicode
 
 ### Tablas Principales
 
-- `habitant`: Usuarios del sistema
-- `device`: Dispositivos IoT
-- `traffic`: Historial de accesos
-- `equipment`: Equipos prestables
-- `loan`: Préstamos activos
+- `users` - Información de usuarios
+- `devices` - Información de dispositivos
+- `loans` - Registro de préstamos
+- `access_logs` - Logs de acceso
+- `sensor_data` - Datos de sensores
 
-## Manejo de Errores
+## Seguridad
 
-### Códigos de Estado HTTP
+### Autenticación
 
-- `200`: Éxito
-- `400`: Datos inválidos
-- `401`: No autorizado
-- `404`: Recurso no encontrado
-- `429`: Rate limit excedido
-- `500`: Error interno del servidor
+La API utiliza autenticación por API Key:
 
-### Formato de Respuesta de Error
-
-```json
-{
-  "success": false,
-  "message": "Descripción del error",
-  "error": "Detalles técnicos (solo en desarrollo)"
-}
-```
-
-### Errores Comunes Solucionados
-
-#### TypeError: Bind parameters must not contain undefined
-**Problema:** Error en consultas SQL cuando parámetros RFID eran undefined.
-
-**Solución implementada:**
-- Validación de parámetros RFID antes de consultas SQL
-- Mejora en `getUserByRegistration()` para incluir datos de tarjetas RFID
-- Manejo robusto de casos donde usuarios no tienen RFID asignado
-- Logging detallado para debugging
-
-**Archivos afectados:**
-- `src/services/prestamoService.js`: Métodos `getUserByRegistration`, `procesarPrestamo`, `handleLoanEquipmentQuery`
-
-**Validaciones agregadas:**
 ```javascript
-if (!userRFID) {
-    return {
-        success: false,
-        message: 'Usuario no tiene RFID asignado',
-        action: 'no_rfid'
-    };
-}
+// Header
+X-API-Key: tu_api_key_aqui
+
+// Query Parameter
+?api_key=tu_api_key_aqui
 ```
 
-## Logging
+### Middleware de Seguridad
 
-### Niveles de Log
-- ✅ **Éxito:** Operaciones exitosas
-- ⚠️ **Advertencia:** Situaciones no críticas
-- ❌ **Error:** Errores que requieren atención
-- 🔄 **Info:** Información general del sistema
-
-### Ejemplos de Logs
-```
-✅ MQTT Listener conectado al broker
-📨 [MQTT Listener] Mensaje recibido desde -> SMART10001/loan_queryu
-❌ Error en consulta de usuario para préstamo
-🔄 Reconectando MQTT...
-```
+- **Helmet**: Configuración de headers de seguridad HTTP
+- **CORS**: Control de acceso cross-origin
+- **Rate Limiting**: Limitación de peticiones por IP
+- **Validación de datos**: Validación con Joi
 
 ## Desarrollo
 
@@ -425,51 +279,54 @@ npm run dev
 # Producción
 npm start
 
-# Tests (pendiente implementar)
+# Tests (pendiente implementación)
 npm test
 ```
 
-### Variables de Entorno de Desarrollo
+### Variables de Entorno
 
-```env
-NODE_ENV=development
-PORT=3000
-DB_HOST=localhost
-MQTT_HOST=192.168.0.100
-```
+Copia `.env.example` a `.env` y configura las siguientes variables:
 
-## Producción
+| Variable | Descripción | Valor por defecto |
+|----------|-------------|-------------------|
+| `PORT` | Puerto del servidor | 3000 |
+| `NODE_ENV` | Entorno de ejecución | development |
+| `DB_HOST` | Host de MySQL | localhost |
+| `DB_USER` | Usuario de MySQL | admin_iotcurso |
+| `DB_PASSWORD` | Contraseña de MySQL | - |
+| `DB_NAME` | Nombre de la base de datos | smartlabs |
+| `DB_PORT` | Puerto de MySQL | 3306 |
+| `MQTT_HOST` | Host del broker MQTT | 192.168.0.100 |
+| `MQTT_PORT` | Puerto del broker MQTT | 1883 |
+| `MQTT_USERNAME` | Usuario MQTT | admin |
+| `MQTT_PASSWORD` | Contraseña MQTT | public |
 
-### Consideraciones
+## Monitoreo y Logs
 
-1. **Variables de entorno:** Configurar todas las variables requeridas
-2. **Base de datos:** Asegurar conectividad a MySQL
-3. **MQTT Broker:** Verificar acceso al broker EMQX
-4. **Firewall:** Abrir puertos necesarios
-5. **SSL/TLS:** Implementar HTTPS en producción
+La aplicación incluye logging detallado para:
 
-### Monitoreo
-
-- **Health check:** `GET /health`
-- **Estado MQTT:** `GET /api/mqtt/status`
-- **Estado interno:** `GET /api/internal/status`
+- Conexiones de base de datos
+- Comunicaciones MQTT
+- Peticiones HTTP
+- Errores y excepciones
+- Estado de dispositivos
 
 ## Contribución
 
 1. Fork el proyecto
-2. Crear rama feature (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit cambios (`git commit -am 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Crear Pull Request
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
 
 ## Licencia
 
-MIT License - ver archivo LICENSE para detalles.
+Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
 
 ## Soporte
 
-Para soporte técnico, contactar al equipo SMARTLABS.
+Para soporte técnico o preguntas, contacta al equipo de SMARTLABS.
 
 ---
 
-**SMARTLABS Team** - Control de equipos IoT para laboratorios educativos
+**SMARTLABS Team** - Sistema de Control de Equipos IoT

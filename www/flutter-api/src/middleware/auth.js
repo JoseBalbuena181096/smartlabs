@@ -26,16 +26,11 @@ const authenticateApiKey = (req, res, next) => {
 };
 
 /**
- * Middleware opcional de autenticación (para desarrollo)
+ * Middleware opcional de autenticación (deshabilitado)
  */
 const optionalAuth = (req, res, next) => {
-    if (process.env.NODE_ENV === 'development') {
-        // En desarrollo, permitir acceso sin API Key
-        next();
-    } else {
-        // En producción, requerir API Key
-        authenticateApiKey(req, res, next);
-    }
+    // Permitir acceso sin API Key (autenticación deshabilitada)
+    next();
 };
 
 module.exports = {

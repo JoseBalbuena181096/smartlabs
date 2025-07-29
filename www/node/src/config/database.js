@@ -4,22 +4,22 @@
  */
 
 module.exports = {
-    // Configuración principal (base de datos externa)
+    // Configuración principal (base de datos MariaDB)
     primary: {
-        host: "192.168.0.100",
-        user: "root",
+        host: "smartlabs-mariadb",
+        user: "emqxuser",
         password: "emqxpass",
         database: "emqx",
-        port: 4000,
+        port: 3306,
         charset: 'utf8mb4',
         connectTimeout: 60000
     },
     
     // Configuración de fallback (base de datos local)
     fallback: {
-        host: "localhost",
-        user: "root",
-        password: "",
+        host: "smartlabs-mariadb",
+        user: "emqxuser",
+        password: "emqxpass",
         database: "emqx",
         port: 3306,
         charset: 'utf8mb4',

@@ -1,594 +1,448 @@
-# Arquitectura del Sistema - SMARTLABS Flutter API
+# Arquitectura SMARTLABS Flutter API
 
 ## Visión General
 
-La SMARTLABS Flutter API es un sistema distribuido que conecta aplicaciones Flutter con dispositivos IoT a través de comunicación MQTT y gestiona datos en una base de datos MySQL. El sistema está diseñado para ser escalable, resiliente y fácil de mantener.
+La SMARTLABS Flutter API es un sistema distribuido que actúa como intermediario entre una aplicación móvil Flutter y dispositivos IoT de laboratorio. La arquitectura sigue el patrón **MVC (Model-View-Controller)** adaptado para APIs REST, con una capa de servicios adicional para la lógica de negocio.
 
 ## Diagrama de Arquitectura
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Flutter App   │    │   Web Client    │    │  Mobile Client  │
+│   Flutter App   │    │   Web Client    │    │  External APIs  │
 └─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
           │                      │                      │
           └──────────────────────┼──────────────────────┘
+                                 │ HTTP/REST
                                  │
-                    ┌────────────▼────────────┐
-                    │    SMARTLABS API        │
-                    │   (Express.js + CORS)   │
-                    └────────────┬────────────┘
+┌────────────────────────────────┼────────────────────────────────┐
+│                    SMARTLABS Flutter API                        │
+│                                │                                │
+│  ┌─────────────────────────────┼─────────────────────────────┐  │
+│  │              Express.js Server                            │  │
+│  │                             │                             │  │
+│  │  ┌─────────────┐  ┌─────────┼─────────┐  ┌─────────────┐  │  │
+│  │  │ Middleware  │  │    Routes Layer    │  │ Controllers │  │  │
+│  │  │             │  │                    │  │             │  │  │
+│  │  │ • Auth      │  │ • userRoutes       │  │ • User      │  │  │
+│  │  │ • CORS      │  │ • deviceRoutes     │  │ • Device    │  │  │
+│  │  │ • Helmet    │  │ • prestamoRoutes   │  │ • Prestamo  │  │  │
+│  │  │ • Rate Limit│  │ • internalRoutes   │  │             │  │  │
+│  │  └─────────────┘  └────────────────────┘  └─────────────┘  │  │
+│  └─────────────────────────────┼─────────────────────────────┘  │
+│                                │                                │
+│  ┌─────────────────────────────┼─────────────────────────────┐  │
+│  │              Services Layer                               │  │
+│  │                             │                             │  │
+│  │  ┌─────────────┐  ┌─────────┼─────────┐  ┌─────────────┐  │  │
+│  │  │ userService │  │ deviceService      │  │prestamoSvc  │  │  │
+│  │  └─────────────┘  └────────────────────┘  └─────────────┘  │  │
+│  │                                                           │  │
+│  │  ┌─────────────────────────────────────────────────────┐  │  │
+│  │  │           mqttListenerService                       │  │  │
+│  │  │  • Escucha tópicos MQTT                            │  │  │
+│  │  │  • Procesa mensajes de hardware                    │  │  │
+│  │  │  • Sincroniza estado con servicios                │  │  │
+│  │  └─────────────────────────────────────────────────────┘  │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                │                                │
+│  ┌─────────────────────────────┼─────────────────────────────┐  │
+│  │              Config Layer                                 │  │
+│  │                             │                             │  │
+│  │  ┌─────────────┐  ┌─────────┼─────────┐                  │  │
+│  │  │ database.js │  │    mqtt.js        │                  │  │
+│  │  └─────────────┘  └───────────────────┘                  │  │
+│  └─────────────────────────────────────────────────────────┘  │
+└────────────────────────────────┼────────────────────────────────┘
                                  │
-              ┌──────────────────┼──────────────────┐
-              │                  │                  │
-    ┌─────────▼─────────┐ ┌──────▼──────┐ ┌────────▼────────┐
-    │   User Service    │ │Device Service│ │ Prestamo Service│
-    └─────────┬─────────┘ └──────┬──────┘ └────────┬────────┘
-              │                  │                 │
-              └──────────────────┼─────────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │    Database Layer       │
-                    │   (MySQL + Fallback)    │
-                    └─────────────────────────┘
-
-                    ┌─────────────────────────┐
-                    │    MQTT Listener        │
-                    │   (Hardware Bridge)     │
-                    └────────────┬────────────┘
-                                 │
-                    ┌────────────▼────────────┐
-                    │     MQTT Broker         │
-                    │       (EMQX)            │
-                    └────────────┬────────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              │                  │                  │
-    ┌─────────▼─────────┐ ┌──────▼──────┐ ┌────────▼────────┐
-    │   IoT Device 1    │ │IoT Device 2 │ │   IoT Device N  │
-    │   (SMART10001)    │ │(SMART10002) │ │  (SMART1000N)   │
-    └───────────────────┘ └─────────────┘ └─────────────────┘
+         ┌───────────────────────┼───────────────────────┐
+         │                       │                       │
+┌────────▼────────┐    ┌─────────▼─────────┐    ┌────────▼────────┐
+│   MySQL DB      │    │   MQTT Broker     │    │   IoT Devices   │
+│                 │    │   (EMQX)          │    │                 │
+│ • users         │    │                   │    │ • ESP32/Arduino │
+│ • devices       │    │ Topics:           │    │ • Sensors       │
+│ • loans         │    │ • SMART*/loan_*   │    │ • Actuators     │
+│ • access_logs   │    │ • SMART*/access_* │    │ • RFID Readers  │
+│ • sensor_data   │    │ • SMART*/sensor_* │    │                 │
+└─────────────────┘    └───────────────────┘    └─────────────────┘
 ```
 
-## Componentes del Sistema
+## Componentes Principales
 
-### 1. API Layer (Express.js)
+### 1. Capa de Presentación (Express.js Server)
+
+#### Middleware Stack
+- **Helmet**: Configuración de headers de seguridad HTTP
+- **CORS**: Manejo de Cross-Origin Resource Sharing
+- **Rate Limiting**: Protección contra ataques de fuerza bruta
+- **Auth Middleware**: Autenticación por API Key
+- **Error Handler**: Manejo centralizado de errores
+- **Request Logger**: Logging de peticiones HTTP
+
+#### Rutas (Routes)
+```javascript
+/api/users/*          → userRoutes.js
+/api/devices/*        → deviceRoutes.js
+/api/prestamos/*      → prestamoRoutes.js
+/internal/*           → internalRoutes.js
+```
+
+### 2. Capa de Control (Controllers)
+
+Los controladores manejan las peticiones HTTP y coordinan las respuestas:
+
+- **UserController**: Gestión de usuarios y autenticación
+- **DeviceController**: Control de dispositivos IoT
+- **PrestamoController**: Lógica de préstamos de equipos
 
 #### Responsabilidades:
-- Manejo de requests HTTP/HTTPS
-- Autenticación y autorización
-- Validación de datos de entrada
-- Rate limiting y seguridad
-- Respuestas estandarizadas
+- Validación de entrada con Joi
+- Coordinación con servicios
+- Formateo de respuestas HTTP
+- Manejo de errores específicos
 
-#### Tecnologías:
-- **Express.js**: Framework web
-- **Helmet**: Seguridad HTTP
-- **CORS**: Cross-Origin Resource Sharing
-- **Joi**: Validación de esquemas
-- **express-rate-limit**: Control de tasa
+### 3. Capa de Servicios (Business Logic)
 
-### 2. Service Layer
-
-#### User Service
+#### UserService
 ```javascript
-class UserService {
-  // Gestión de usuarios
-  async getUserByRegistration(registration)
-  async getUserByRFID(rfid)
-  async validateUser(registration)
-  async getUserAccessHistory(userId, limit)
-}
+• getUserByRegistration(registration)
+• getUserByRFID(rfid)
+• getUserHistory(registration, limit)
+• validateUser(registration)
 ```
 
-#### Device Service
+#### DeviceService
 ```javascript
-class DeviceService {
-  // Gestión de dispositivos
-  async getDeviceBySerial(serie)
-  async controlDevice(serie, userId, userName, action)
-  async getDeviceHistory(serie, limit)
-  async getAllDevices()
-}
+• getDeviceBySerial(serial)
+• controlDevice(serial, action)
+• getDeviceHistory(serial, limit)
+• getAllDevices()
+• getDeviceStatus(serial)
 ```
 
-#### Prestamo Service
+#### PrestamoService
 ```javascript
-class PrestamoService {
-  // Gestión de préstamos
-  async procesarPrestamo(registration, deviceSerie, action)
-  async handleLoanUserQuery(serialNumber, rfidNumber)
-  async simularDispositivoFisico(registration, deviceSerie)
-}
+• procesarPrestamo(registration, deviceSerie, action)
+• prestarEquipo(registration, deviceSerie)
+• simularDispositivoFisico(data)
+• obtenerEstadoSesion()
 ```
 
-### 3. Data Layer
-
-#### Database Configuration
+#### MQTTListenerService
 ```javascript
-class DatabaseConfig {
-  constructor() {
-    this.primaryConfig = { /* Configuración principal */ }
-    this.fallbackConfig = { /* Configuración fallback */ }
-  }
-  
-  async connect() {
-    // Intenta conexión principal, fallback automático
-  }
-}
+• startListening()
+• handleMQTTMessage(topic, message)
+• handleLoanUserQuery(serial, rfid)
+• handleLoanEquipmentQuery(serial, rfid)
+• handleAccessQuery(serial, rfid)
+• publishMQTTCommand(serial, user, command)
 ```
 
-#### Tablas Principales:
+### 4. Capa de Configuración
 
-**habitant** (Usuarios)
-```sql
-CREATE TABLE habitant (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  name VARCHAR(255) NOT NULL,
-  registration VARCHAR(50) UNIQUE NOT NULL,
-  email VARCHAR(255),
-  cards_number VARCHAR(50),
-  device_id INT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+#### DatabaseConfig
+- Configuración de conexión MySQL
+- Pool de conexiones
+- Fallback automático
+- Reconexión automática
 
-**device** (Dispositivos)
-```sql
-CREATE TABLE device (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  alias VARCHAR(255) NOT NULL,
-  serie VARCHAR(50) UNIQUE NOT NULL,
-  date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  status TINYINT DEFAULT 0
-);
-```
+#### MQTTConfig
+- Configuración del cliente MQTT
+- Manejo de suscripciones
+- Publicación de mensajes
+- Reconexión automática
 
-**traffic** (Historial de Accesos)
-```sql
-CREATE TABLE traffic (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  habitant_id INT,
-  device_id INT,
-  action VARCHAR(10),
-  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (habitant_id) REFERENCES habitant(id),
-  FOREIGN KEY (device_id) REFERENCES device(id)
-);
-```
+## Patrones de Diseño Implementados
 
-### 4. MQTT Layer
-
-#### MQTT Listener Service
+### 1. Singleton Pattern
 ```javascript
-class MQTTListenerService {
-  // Escucha mensajes del hardware
-  async handleLoanUserQuery(serialNumber, rfidNumber)
-  async handleLoanEquipmentQuery(serialNumber, equipRfid)
-  async handleAccessQuery(serialNumber, message)
-  async publishMQTTCommand(serialNumber, userName, action)
-}
-```
-
-#### Tópicos MQTT:
-
-**Entrada (Hardware → API):**
-- `SMART{XXXXX}/loan_queryu`: Consultas de usuario
-- `SMART{XXXXX}/loan_querye`: Consultas de equipo
-- `SMART{XXXXX}/access_query`: Consultas de acceso
-- `values`: Datos de sensores
-
-**Salida (API → Hardware):**
-- `SMART{XXXXX}/loan_response`: Respuestas de préstamo
-- `SMART{XXXXX}/access_response`: Respuestas de acceso
-
-## Flujos de Datos
-
-### 1. Flujo de Control de Dispositivo (App → API → Hardware)
-
-```mermaid
-sequenceDiagram
-    participant App as Flutter App
-    participant API as SMARTLABS API
-    participant DB as MySQL Database
-    participant MQTT as MQTT Broker
-    participant HW as IoT Hardware
-
-    App->>API: POST /api/devices/control
-    API->>API: Validar datos (Joi)
-    API->>DB: Verificar usuario
-    API->>DB: Verificar dispositivo
-    API->>DB: Registrar acción
-    API->>MQTT: Publicar comando
-    MQTT->>HW: Enviar comando
-    HW->>MQTT: Confirmar acción
-    API->>App: Respuesta exitosa
-```
-
-### 2. Flujo MQTT (Hardware → API → Database)
-
-```mermaid
-sequenceDiagram
-    participant HW as IoT Hardware
-    participant MQTT as MQTT Broker
-    participant API as MQTT Listener
-    participant DB as MySQL Database
-
-    HW->>MQTT: SMART10001/loan_queryu: "1234567890"
-    MQTT->>API: Mensaje recibido
-    API->>DB: Buscar usuario por RFID
-    API->>DB: Verificar estado del dispositivo
-    API->>DB: Procesar lógica de préstamo
-    API->>DB: Registrar transacción
-    API->>MQTT: SMART10001/loan_response: "Juan Pérez,1"
-    MQTT->>HW: Respuesta procesada
-```
-
-### 3. Flujo de Consulta de Usuario
-
-```mermaid
-sequenceDiagram
-    participant App as Flutter App
-    participant API as SMARTLABS API
-    participant DB as MySQL Database
-
-    App->>API: GET /api/users/registration/A01234567
-    API->>API: Validar matrícula (Joi)
-    API->>DB: SELECT * FROM habitant WHERE registration = ?
-    DB->>API: Datos del usuario
-    API->>API: Formatear respuesta
-    API->>App: JSON con datos del usuario
-```
-
-## Patrones de Diseño
-
-### 1. Repository Pattern
-
-Cada servicio actúa como un repositorio que encapsula la lógica de acceso a datos:
-
-```javascript
-class UserService {
-  async getUserByRegistration(registration) {
-    const connection = dbConfig.getConnection();
-    const [rows] = await connection.execute(
-      'SELECT * FROM habitant WHERE registration = ?',
-      [registration]
-    );
-    return rows[0] || null;
-  }
-}
+// Servicios implementados como singletons
+module.exports = new UserService();
+module.exports = new DatabaseConfig();
+module.exports = new MQTTListenerService();
 ```
 
 ### 2. Factory Pattern
-
-La configuración de base de datos utiliza el patrón factory para crear conexiones:
-
 ```javascript
+// Creación de conexiones de base de datos
 class DatabaseConfig {
-  async connect() {
-    try {
-      return await this.createConnection(this.primaryConfig);
-    } catch (error) {
-      return await this.createConnection(this.fallbackConfig);
+    async connect() {
+        // Factory para crear conexiones con fallback
     }
-  }
 }
 ```
 
 ### 3. Observer Pattern
-
-El MQTT Listener implementa el patrón observer para manejar mensajes:
-
 ```javascript
+// MQTT Listener como observer de mensajes
 class MQTTListenerService {
-  constructor() {
-    this.messageHandlers = new Map();
-  }
-  
-  subscribe(topic, callback) {
-    this.messageHandlers.set(topic, callback);
-  }
-}
-```
-
-### 4. Middleware Pattern
-
-Express.js utiliza middleware para procesar requests:
-
-```javascript
-app.use(helmet()); // Seguridad
-app.use(cors());   // CORS
-app.use(rateLimit()); // Rate limiting
-app.use(express.json()); // Parsing JSON
-app.use(requestLogger); // Logging
-```
-
-## Estrategias de Resilencia
-
-### 1. Database Fallback
-
-```javascript
-async connect() {
-  try {
-    // Intentar conexión principal
-    this.connection = await mysql.createConnection(this.primaryConfig);
-  } catch (error) {
-    // Fallback automático
-    this.connection = await mysql.createConnection(this.fallbackConfig);
-  }
-}
-```
-
-### 2. MQTT Reconnection
-
-```javascript
-const mqttOptions = {
-  reconnectPeriod: 1000, // Reconectar cada segundo
-  connectTimeout: 4000,  // Timeout de conexión
-  clean: true           // Sesión limpia
-};
-```
-
-### 3. Error Handling
-
-```javascript
-class ErrorHandler {
-  static handle(error, req, res, next) {
-    console.error('Error:', error);
-    
-    if (error.name === 'ValidationError') {
-      return res.status(400).json({
-        success: false,
-        message: 'Datos inválidos',
-        error: error.message
-      });
+    constructor() {
+        this.messageHandlers = new Map();
     }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Error interno del servidor'
-    });
-  }
 }
 ```
 
-### 4. Rate Limiting
-
+### 4. Strategy Pattern
 ```javascript
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // máximo 100 requests
-  message: {
-    success: false,
-    message: 'Demasiadas solicitudes'
-  }
-});
+// Diferentes estrategias de manejo de mensajes MQTT
+handleLoanUserQuery()
+handleLoanEquipmentQuery()
+handleAccessQuery()
+handleScholarQuery()
 ```
+
+## Flujo de Datos
+
+### 1. Flujo HTTP Request/Response
+```
+Client Request → Middleware → Routes → Controller → Service → Database
+                                                           ↓
+Client Response ← Middleware ← Routes ← Controller ← Service ← Database
+```
+
+### 2. Flujo MQTT
+```
+IoT Device → MQTT Broker → MQTTListenerService → PrestamoService → Database
+                                    ↓
+IoT Device ← MQTT Broker ← MQTTListenerService ← Response Processing
+```
+
+### 3. Flujo de Control de Dispositivos
+```
+Flutter App → POST /api/devices/control → DeviceController → DeviceService
+                                                                    ↓
+                                                            MQTT Publish
+                                                                    ↓
+                                                            IoT Device
+```
+
+## Comunicación Entre Componentes
+
+### 1. HTTP REST API
+- **Protocolo**: HTTP/HTTPS
+- **Formato**: JSON
+- **Autenticación**: API Key
+- **Validación**: Joi schemas
+
+### 2. MQTT Communication
+- **Protocolo**: MQTT v3.1.1/v5.0
+- **QoS**: 0, 1, 2 según necesidad
+- **Topics**: Patrón jerárquico `SMART*/category/action`
+- **Payload**: JSON estructurado
+
+### 3. Database Access
+- **Protocolo**: MySQL Protocol
+- **Pool**: Conexiones reutilizables
+- **Transacciones**: Para operaciones críticas
+- **Charset**: UTF8MB4
 
 ## Seguridad
 
-### 1. Input Validation
-
+### 1. Autenticación y Autorización
 ```javascript
-const schema = Joi.object({
-  registration: Joi.string().required().min(1).max(50),
-  device_serie: Joi.string().required().min(1).max(50),
-  action: Joi.number().integer().valid(0, 1).required()
-});
-```
-
-### 2. SQL Injection Prevention
-
-```javascript
-// Usar prepared statements
-const [rows] = await connection.execute(
-  'SELECT * FROM habitant WHERE registration = ?',
-  [registration] // Parámetros seguros
-);
-```
-
-### 3. CORS Configuration
-
-```javascript
-const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    /^http:\/\/localhost:\d+$/
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+// API Key Authentication
+const authenticateApiKey = (req, res, next) => {
+    const apiKey = req.headers['x-api-key'] || req.query.api_key;
+    // Validación de API Key
 };
 ```
 
-### 4. Headers de Seguridad
-
+### 2. Validación de Datos
 ```javascript
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"]
-    }
-  }
-}));
+// Joi Validation Schemas
+const schema = Joi.object({
+    registration: Joi.string().required().min(1).max(50),
+    device_serie: Joi.string().required().min(1).max(50),
+    action: Joi.number().integer().valid(0, 1).required()
+});
 ```
+
+### 3. Seguridad HTTP
+- **Helmet**: Headers de seguridad
+- **CORS**: Control de origen
+- **Rate Limiting**: Protección DDoS
+- **Input Sanitization**: Prevención de inyecciones
 
 ## Escalabilidad
 
 ### 1. Horizontal Scaling
-
-- **Load Balancer**: Nginx o HAProxy
+- **Load Balancer**: Nginx/HAProxy
 - **Multiple Instances**: PM2 cluster mode
-- **Database Clustering**: MySQL Master-Slave
+- **Database Sharding**: Por región/laboratorio
 
-### 2. Caching Strategy
+### 2. Vertical Scaling
+- **Connection Pooling**: MySQL2 pools
+- **Memory Management**: Garbage collection optimization
+- **CPU Optimization**: Async/await patterns
 
+### 3. Caching Strategy
+- **Redis**: Para sesiones y datos frecuentes
+- **Memory Cache**: Para configuraciones
+- **Database Query Cache**: MySQL query cache
+
+## Monitoreo y Observabilidad
+
+### 1. Logging
 ```javascript
-class CacheService {
-  constructor() {
-    this.cache = new Map();
-    this.ttl = 5 * 60 * 1000; // 5 minutos
-  }
-  
-  get(key) {
-    const item = this.cache.get(key);
-    if (item && Date.now() < item.expiry) {
-      return item.value;
-    }
-    this.cache.delete(key);
-    return null;
-  }
-  
-  set(key, value) {
-    this.cache.set(key, {
-      value,
-      expiry: Date.now() + this.ttl
-    });
-  }
-}
-```
-
-### 3. Database Optimization
-
-```sql
--- Índices para consultas frecuentes
-CREATE INDEX idx_habitant_registration ON habitant(registration);
-CREATE INDEX idx_habitant_cards_number ON habitant(cards_number);
-CREATE INDEX idx_device_serie ON device(serie);
-CREATE INDEX idx_traffic_timestamp ON traffic(timestamp);
-```
-
-## Monitoreo y Logging
-
-### 1. Application Logging
-
-```javascript
-class Logger {
-  static info(message, data = {}) {
-    console.log(`ℹ️ [${new Date().toISOString()}] ${message}`, data);
-  }
-  
-  static error(message, error = {}) {
-    console.error(`❌ [${new Date().toISOString()}] ${message}`, error);
-  }
-  
-  static success(message, data = {}) {
-    console.log(`✅ [${new Date().toISOString()}] ${message}`, data);
-  }
-}
+// Structured Logging
+console.log('🔌 Conectando a base de datos principal...');
+console.log('✅ Conexión exitosa a base de datos principal');
+console.log('❌ Error en conexión:', error.message);
 ```
 
 ### 2. Health Checks
+- **Database**: Ping periódico
+- **MQTT**: Estado de conexión
+- **Memory**: Uso de memoria
+- **CPU**: Carga del sistema
 
-```javascript
-app.get('/health', async (req, res) => {
-  const health = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    services: {
-      database: await checkDatabaseHealth(),
-      mqtt: await checkMQTTHealth()
-    }
-  };
-  
-  res.json({ success: true, data: health });
-});
+### 3. Métricas
+- **Request Rate**: Peticiones por segundo
+- **Response Time**: Latencia promedio
+- **Error Rate**: Porcentaje de errores
+- **Device Status**: Estado de dispositivos IoT
+
+## Configuración de Entornos
+
+### 1. Development
+```env
+NODE_ENV=development
+PORT=3000
+DB_HOST=localhost
+MQTT_HOST=localhost
 ```
 
-### 3. Metrics Collection
-
-```javascript
-class MetricsCollector {
-  constructor() {
-    this.metrics = {
-      requests: 0,
-      errors: 0,
-      mqttMessages: 0,
-      dbQueries: 0
-    };
-  }
-  
-  incrementRequest() {
-    this.metrics.requests++;
-  }
-  
-  getMetrics() {
-    return { ...this.metrics };
-  }
-}
+### 2. Staging
+```env
+NODE_ENV=staging
+PORT=3000
+DB_HOST=staging-db.example.com
+MQTT_HOST=staging-mqtt.example.com
 ```
+
+### 3. Production
+```env
+NODE_ENV=production
+PORT=80
+DB_HOST=prod-db.example.com
+MQTT_HOST=prod-mqtt.example.com
+```
+
+## Manejo de Errores
+
+### 1. Error Hierarchy
+```javascript
+// Custom Error Classes
+class ValidationError extends Error {}
+class DatabaseError extends Error {}
+class MQTTError extends Error {}
+class AuthenticationError extends Error {}
+```
+
+### 2. Error Handling Strategy
+- **Try-Catch**: En todas las operaciones async
+- **Error Middleware**: Manejo centralizado
+- **Graceful Degradation**: Fallbacks automáticos
+- **Circuit Breaker**: Para servicios externos
+
+## Testing Strategy
+
+### 1. Unit Tests
+- **Services**: Lógica de negocio
+- **Controllers**: Manejo de requests
+- **Utilities**: Funciones auxiliares
+
+### 2. Integration Tests
+- **Database**: Operaciones CRUD
+- **MQTT**: Comunicación con broker
+- **API Endpoints**: Flujo completo
+
+### 3. E2E Tests
+- **User Flows**: Casos de uso completos
+- **Device Control**: Interacción con IoT
+- **Error Scenarios**: Manejo de fallos
 
 ## Deployment
 
-### 1. Docker Configuration
-
+### 1. Containerization
 ```dockerfile
+# Dockerfile example
 FROM node:18-alpine
-
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm ci --only=production
-
 COPY src/ ./src/
-
 EXPOSE 3000
-
 CMD ["npm", "start"]
 ```
 
-### 2. Docker Compose
+### 2. Orchestration
+- **Docker Compose**: Desarrollo local
+- **Kubernetes**: Producción
+- **PM2**: Process management
 
+### 3. CI/CD Pipeline
 ```yaml
-version: '3.8'
-services:
-  api:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DB_HOST=mysql
-      - MQTT_HOST=emqx
-    depends_on:
-      - mysql
-      - emqx
-  
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: smartlabs
-    volumes:
-      - mysql_data:/var/lib/mysql
-  
-  emqx:
-    image: emqx/emqx:latest
-    ports:
-      - "1883:1883"
-      - "8083:8083"
-
-volumes:
-  mysql_data:
+# GitHub Actions example
+name: Deploy SMARTLABS API
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Deploy to production
+        run: ./deploy.sh
 ```
 
-### 3. Production Considerations
+## Consideraciones de Performance
 
-- **Environment Variables**: Usar secretos seguros
-- **SSL/TLS**: Certificados válidos
-- **Reverse Proxy**: Nginx con SSL termination
-- **Process Management**: PM2 o similar
-- **Monitoring**: Prometheus + Grafana
-- **Logging**: ELK Stack o similar
+### 1. Database Optimization
+- **Índices**: En campos de búsqueda frecuente
+- **Query Optimization**: Consultas eficientes
+- **Connection Pooling**: Reutilización de conexiones
 
-## Conclusión
+### 2. MQTT Optimization
+- **QoS Levels**: Según criticidad del mensaje
+- **Topic Design**: Estructura jerárquica eficiente
+- **Message Size**: Payloads optimizados
 
-La arquitectura de SMARTLABS Flutter API está diseñada para ser:
+### 3. Memory Management
+- **Garbage Collection**: Configuración optimizada
+- **Memory Leaks**: Monitoreo y prevención
+- **Buffer Management**: Para datos binarios
 
-- **Modular**: Componentes independientes y reutilizables
-- **Escalable**: Soporta crecimiento horizontal y vertical
-- **Resiliente**: Manejo robusto de errores y fallbacks
-- **Segura**: Múltiples capas de seguridad
-- **Mantenible**: Código limpio y bien documentado
+## Roadmap y Mejoras Futuras
 
-Esta arquitectura permite una integración fluida entre aplicaciones Flutter, dispositivos IoT y sistemas de gestión de datos, proporcionando una base sólida para el ecosistema SMARTLABS.
+### 1. Funcionalidades Pendientes
+- [ ] Sistema de notificaciones push
+- [ ] Dashboard de administración web
+- [ ] API de reportes y analytics
+- [ ] Integración con sistemas externos
+
+### 2. Mejoras Técnicas
+- [ ] Implementación de GraphQL
+- [ ] Migración a TypeScript
+- [ ] Implementación de microservicios
+- [ ] Cache distribuido con Redis
+
+### 3. Seguridad Avanzada
+- [ ] OAuth 2.0 / JWT
+- [ ] Encriptación end-to-end
+- [ ] Audit logging
+- [ ] Penetration testing
+
+---
+
+**Documento de Arquitectura v2.0**  
+**SMARTLABS Team**  
+**Fecha: 2025**

@@ -1,0 +1,198 @@
+2025-07-29 11:27:19 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:27:19 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:27:19 smartlabs-device-monitor  | 
+2025-07-29 11:27:19 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:27:19 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:27:19 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:27:19 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:27:19 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:27:21 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:27:21 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:27:21 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:27:21 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:27:21 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:27:21 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:27:21 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:27:25 smartlabs-device-monitor  | 
+2025-07-29 11:27:25 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:27:25 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:27:25 smartlabs-device-monitor  | 
+2025-07-29 11:27:25 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:27:25 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:27:25 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:27:25 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:27:25 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:27:27 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:27:27 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:27:28 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:27:28 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:27:28 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:27:28 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:27:28 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:27:35 smartlabs-device-monitor  | 
+2025-07-29 11:27:35 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:27:35 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:27:35 smartlabs-device-monitor  | 
+2025-07-29 11:27:35 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:27:35 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:27:35 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:27:35 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:27:35 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:27:37 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:27:37 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:27:37 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:27:37 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:27:37 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:27:37 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:27:37 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:27:51 smartlabs-device-monitor  | 
+2025-07-29 11:27:51 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:27:51 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:27:51 smartlabs-device-monitor  | 
+2025-07-29 11:27:51 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:27:51 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:27:51 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:27:51 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:27:51 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:27:53 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:27:53 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:27:53 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:27:53 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:27:53 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:27:53 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:27:53 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:28:19 smartlabs-device-monitor  | 
+2025-07-29 11:28:19 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:28:19 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:28:19 smartlabs-device-monitor  | 
+2025-07-29 11:28:19 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:28:19 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:28:19 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:28:19 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:28:19 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:28:21 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:28:21 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:28:21 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:28:21 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:28:21 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:28:21 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:28:21 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:29:13 smartlabs-device-monitor  | 
+2025-07-29 11:29:13 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:29:13 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:29:13 smartlabs-device-monitor  | 
+2025-07-29 11:29:13 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:29:13 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:29:14 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:29:14 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:29:14 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:29:16 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:29:16 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:29:16 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:29:16 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:29:16 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:29:16 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:29:16 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:30:16 smartlabs-device-monitor  | 
+2025-07-29 11:30:16 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:30:16 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:30:16 smartlabs-device-monitor  | 
+2025-07-29 11:30:16 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:30:16 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:30:16 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:30:16 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:30:16 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:30:18 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:30:18 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:30:18 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:30:19 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:30:19 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:30:19 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:30:19 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:31:19 smartlabs-device-monitor  | 
+2025-07-29 11:31:19 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:31:19 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:31:19 smartlabs-device-monitor  | 
+2025-07-29 11:31:19 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:31:19 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:31:19 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:31:19 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:31:19 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:31:21 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:31:21 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:31:21 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:31:21 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:31:21 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:31:21 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:31:21 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:32:22 smartlabs-device-monitor  | 
+2025-07-29 11:32:22 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:32:22 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:32:22 smartlabs-device-monitor  | 
+2025-07-29 11:32:22 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:32:22 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:32:22 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:32:22 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:32:22 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:32:24 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:32:24 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:32:24 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:32:24 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:32:24 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:32:24 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:32:24 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:33:25 smartlabs-device-monitor  | 
+2025-07-29 11:33:25 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:33:25 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:33:25 smartlabs-device-monitor  | 
+2025-07-29 11:33:25 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:33:25 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:33:25 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:33:25 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:33:25 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:33:27 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:33:27 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:33:27 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:33:27 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:33:27 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:33:27 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:33:27 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:34:28 smartlabs-device-monitor  | 
+2025-07-29 11:34:28 smartlabs-device-monitor  | > smartlabs-device-status-server@2.0.0 start
+2025-07-29 11:34:28 smartlabs-device-monitor  | > node scripts/start-device-server.js
+2025-07-29 11:34:28 smartlabs-device-monitor  | 
+2025-07-29 11:34:28 smartlabs-device-monitor  | 🔧 Iniciando servidor de estado de dispositivos...
+2025-07-29 11:34:28 smartlabs-device-monitor  | 📁 Cargando desde: /app/src/services/device-status/server.js
+2025-07-29 11:34:28 smartlabs-device-monitor  | ✅ Servidor de estado de dispositivos iniciado correctamente
+2025-07-29 11:34:28 smartlabs-device-monitor  | 🚀 Servidor WebSocket iniciado en puerto 3000
+2025-07-29 11:34:28 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos principal...
+2025-07-29 11:34:30 smartlabs-device-monitor  | ⚠️ Error conectando a la base de datos principal: connect ECONNREFUSED 192.168.0.100:4000
+2025-07-29 11:34:30 smartlabs-device-monitor  | 🔌 Intentando conectar a la base de datos local...
+2025-07-29 11:34:30 smartlabs-device-monitor  | ❌ Error conectando a la base de datos local: connect ECONNREFUSED ::1:3306
+2025-07-29 11:34:30 smartlabs-device-monitor  | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:34:30 smartlabs-device-monitor  |     at connectToDatabase (/app/src/services/device-status/server.js:50:19)
+2025-07-29 11:34:30 smartlabs-device-monitor  |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:34:30 smartlabs-device-monitor  |     at async Server.<anonymous> (/app/src/services/device-status/server.js:256:24)
+2025-07-29 11:35:20 smartlabs-flutter-api     | 🔧 Configuración de BD: {
+2025-07-29 11:35:20 smartlabs-flutter-api     |   primary: 'emqxuser@mariadb_host:3306/emqx',
+2025-07-29 11:35:20 smartlabs-flutter-api     |   fallback: 'emqxuser@localhost:4000/emqx'
+2025-07-29 11:35:20 smartlabs-flutter-api     | }
+2025-07-29 11:35:20 smartlabs-flutter-api     | 🚀 Iniciando SMARTLABS Flutter API...
+2025-07-29 11:35:20 smartlabs-flutter-api     | 🚀 Inicializando conexiones...
+2025-07-29 11:35:20 smartlabs-flutter-api     | 🔌 Conectando a base de datos principal...
+2025-07-29 11:35:20 smartlabs-flutter-api     | Ignoring invalid configuration option passed to Connection: acquireTimeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+2025-07-29 11:35:20 smartlabs-mariadb         | 2025-07-29 11:35:20 20 [Warning] Access denied for user 'emqxuser'@'172.19.0.6' (using password: YES)
+2025-07-29 11:35:20 smartlabs-flutter-api     | ⚠️ Error en base de datos principal, intentando fallback: Access denied for user 'emqxuser'@'172.19.0.6' (using password: YES)
+2025-07-29 11:35:20 smartlabs-flutter-api     | Ignoring invalid configuration option passed to Connection: acquireTimeout. This is currently a warning, but in future versions of MySQL2, an error will be thrown if you pass an invalid configuration option to a Connection
+2025-07-29 11:35:20 smartlabs-flutter-api     | ✅ Flutter API conectado a MQTT broker
+2025-07-29 11:35:20 smartlabs-flutter-api     | ❌ Error en ambas bases de datos: connect ECONNREFUSED ::1:4000
+2025-07-29 11:35:20 smartlabs-flutter-api     | ❌ Error inicializando conexiones: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at DatabaseConfig.connect (/app/src/config/database.js:59:23)
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at async SmartLabsFlutterAPI.initializeConnections (/app/src/index.js:237:13)
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at async SmartLabsFlutterAPI.start (/app/src/index.js:269:13)
+2025-07-29 11:35:20 smartlabs-flutter-api     | ❌ Error iniciando servidor: Error: No se pudo conectar a ninguna base de datos
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at DatabaseConfig.connect (/app/src/config/database.js:59:23)
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at async SmartLabsFlutterAPI.initializeConnections (/app/src/index.js:237:13)
+2025-07-29 11:35:20 smartlabs-flutter-api     |     at async SmartLabsFlutterAPI.start (/app/src/index.js:269:13)

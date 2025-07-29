@@ -330,7 +330,7 @@ if (hostname === 'localhost' || hostname === '127.0.0.1') {
     console.log('📡 Configuración MQTT: Acceso local detectado (WSS)');
 } else if (hostname === '192.168.0.100') {
     // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
-    WebSocket_URL = 'ws://192.168.0.100:8073/mqtt';
+    WebSocket_URL = 'ws://192.168.0.100:8083/mqtt';
     console.log('📡 Configuración MQTT: Acceso desde red externa detectado (WS)');
 } else {
     // Fallback - usar WS no seguro
@@ -481,7 +481,7 @@ function processRfidWithSessionLogic(rfid, deviceSerial) {
 function validateRfidWithApi(rfid) {
     return new Promise(function(resolve, reject) {
         $.ajax({
-            url: 'http://192.168.0.100:3001/api/users/rfid/' + encodeURIComponent(rfid),
+            url: 'http://192.168.0.100:3000/api/users/rfid/' + encodeURIComponent(rfid),
             method: 'GET',
             timeout: 5000,
             success: function(response) {
@@ -511,7 +511,7 @@ function validateRfidWithApi(rfid) {
 function checkSessionState() {
     return new Promise(function(resolve, reject) {
         $.ajax({
-            url: 'http://192.168.0.100:3001/api/prestamo/estado/',
+            url: 'http://192.168.0.100:3000/api/prestamo/estado/',
             method: 'GET',
             timeout: 5000,
             success: function(response) {

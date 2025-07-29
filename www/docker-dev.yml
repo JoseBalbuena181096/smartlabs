@@ -1,0 +1,110 @@
+# Docker Compose para desarrollo local
+# Este archivo permite ejecutar solo algunos servicios en Docker
+# mientras se desarrolla localmente con Laragon
+
+version: '3.8'
+
+services:
+  # Base de datos - siempre en Docker para consistencia
+  mariadb:
+    image: mariadb:10.11
+    container_name: smartlabs_mariadb_dev
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      TZ: ${TZ}
+    ports:
+      - "${MARIADB_PORT}:3306"
+    volumes:
+      - mariadb_data_dev:/var/lib/mysql
+      - ./DOCKER_SMARTLABS-main/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - smartlabs-dev-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # EMQX MQTT Broker - en Docker para IoT
+  emqx:
+    image: emqx/emqx:5.1
+    container_name: smartlabs_emqx_dev
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+      EMQX_ALLOW_ANONYMOUS: "false"
+      EMQX_NODE__COOKIE: smartlabs_emqx_cookie
+      # Configuración MySQL para autenticación
+      EMQX_AUTH__MYSQL__SERVER: mariadb:3306
+      EMQX_AUTH__MYSQL__USERNAME: ${MARIADB_USER}
+      EMQX_AUTH__MYSQL__PASSWORD: ${MARIADB_PASSWORD}
+      EMQX_AUTH__MYSQL__DATABASE: ${MARIADB_DATABASE}
+      EMQX_LOADED_PLUGINS: "emqx_auth_mysql"
+    ports:
+      - "${EMQX_DASHBOARD_PORT}:18083"   # Dashboard
+      - "${EMQX_DASHBOARD_HTTPS_PORT}:18084" # Dashboard HTTPS
+      - "${EMQX_MQTT_PORT}:1883"         # MQTT
+      - "${EMQX_MQTT_SSL_PORT}:8883"     # MQTT SSL
+      - "${EMQX_HTTP_API_PORT}:8073"     # HTTP API
+      - "${EMQX_HTTPS_API_PORT}:8074"    # HTTPS API
+      - "${EMQX_WS_PORT}:8082"           # WebSocket
+      - "${EMQX_WSS_PORT}:8081"          # WebSocket SSL
+    volumes:
+      - emqx_data_dev:/opt/emqx/data
+      - emqx_etc_dev:/opt/emqx/etc
+      - emqx_log_dev:/opt/emqx/log
+    networks:
+      - smartlabs-dev-network
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      interval: 5s
+      timeout: 25s
+      retries: 5
+
+  # phpMyAdmin para administración de DB
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2
+    container_name: smartlabs_phpmyadmin_dev
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      PMA_USER: ${MARIADB_USER}
+      PMA_PASSWORD: ${MARIADB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      UPLOAD_LIMIT: 64M
+    ports:
+      - "${PHPMYADMIN_PORT}:80"
+    networks:
+      - smartlabs-dev-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mariadb_data_dev:
+    driver: local
+  emqx_data_dev:
+    driver: local
+  emqx_etc_dev:
+    driver: local
+  emqx_log_dev:
+    driver: local
+
+networks:
+  smartlabs-dev-network:
+    driver: bridge
+    name: smartlabs-dev-network

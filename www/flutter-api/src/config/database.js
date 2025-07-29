@@ -8,25 +8,23 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 class DatabaseConfig {
     constructor() {
         this.primaryConfig = {
-            host: process.env.DB_HOST || '192.168.0.100',
+            host: process.env.DB_HOST || 'smartlabs-mariadb',
             user: process.env.DB_USER || 'emqxuser',
             password: process.env.DB_PASSWORD || 'emqxpass',
             database: process.env.DB_NAME || 'emqx',
-            port: parseInt(process.env.DB_PORT) || 4000,
+            port: parseInt(process.env.DB_PORT) || 3306,
             charset: 'utf8mb4',
-            connectTimeout: 60000,
-            acquireTimeout: 60000
+            connectTimeout: 60000
         };
 
         this.fallbackConfig = {
-            host: process.env.DB_LOCAL_HOST || 'localhost',
+            host: process.env.DB_LOCAL_HOST || 'smartlabs-mariadb',
             user: process.env.DB_LOCAL_USER || 'emqxuser',
             password: process.env.DB_LOCAL_PASSWORD || 'emqxpass',
             database: process.env.DB_LOCAL_NAME || 'emqx',
-            port: parseInt(process.env.DB_LOCAL_PORT) || 4000,
+            port: parseInt(process.env.DB_LOCAL_PORT) || 3306,
             charset: 'utf8mb4',
-            connectTimeout: 30000,
-            acquireTimeout: 30000
+            connectTimeout: 30000
         };
         
         console.log('🔧 Configuración de BD:', {

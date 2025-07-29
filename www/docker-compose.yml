@@ -1,0 +1,333 @@
+version: '3.8'
+
+volumes:
+  # Volúmenes para EMQX
+  vol-emqx-data:
+    name: smartlabs-emqx-data
+  vol-emqx-etc:
+    name: smartlabs-emqx-etc
+  vol-emqx-log:
+    name: smartlabs-emqx-log
+  
+  # Volúmenes para MariaDB
+  mariadb-data:
+    driver: local
+  
+  # Volúmenes para logs de aplicaciones
+  app-logs:
+    driver: local
+
+networks:
+  smartlabs-network:
+    name: smartlabs_network
+    driver: bridge
+
+services:
+  
+  # Base de datos MariaDB
+  mariadb:
+    container_name: smartlabs-mariadb
+    image: mariadb:11.2
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Mexico_City}
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MYSQL_USER: ${MARIADB_USER}
+      MYSQL_PASSWORD: ${MARIADB_PASSWORD}
+      MYSQL_DATABASE: ${MARIADB_DATABASE}
+    ports:
+      - "${MARIADB_PORT:-3306}:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./docker/backup_completo2025.sql:/docker-entrypoint-initdb.d/backup_completo2025.sql:ro
+    networks:
+      smartlabs-network:
+        aliases: 
+          - mariadb_host
+    # healthcheck:
+    #   test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+    #   start_period: 60s
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+
+  # PHPMyAdmin para administración de base de datos
+  phpmyadmin:
+    container_name: smartlabs-phpmyadmin
+    image: phpmyadmin:5.2
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+    ports:
+      - "${PHPMYADMIN_PORT:-8080}:80"
+    environment:
+      - TZ=${TZ:-America/Mexico_City}
+      - PMA_HOST=mariadb_host
+      - PMA_PORT=3306
+      - PMA_USER=${MARIADB_USER}
+      - PMA_PASSWORD=${MARIADB_PASSWORD}
+    networks:
+      smartlabs-network:
+        aliases: 
+          - phpmyadmin_host
+
+  # Broker MQTT EMQX
+  emqx:
+    container_name: smartlabs-emqx
+    image: emqx/emqx:5.4.1
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+    ports:
+      # Dashboard EMQX
+      - "${EMQX_DASHBOARD_PORT:-18083}:18083"
+      - "${EMQX_DASHBOARD_HTTPS_PORT:-18084}:18084"
+      # MQTT
+      - "${EMQX_MQTT_PORT:-1883}:1883"
+      - "${EMQX_MQTT_SSL_PORT:-8883}:8883"
+      # WebSocket
+      - "${EMQX_WS_PORT:-8083}:8083"
+      - "${EMQX_WSS_PORT:-8084}:8084"
+      # Management API
+      - "${EMQX_API_PORT:-8081}:8081"
+    volumes:
+      - vol-emqx-data:/opt/emqx/data
+      - vol-emqx-etc:/opt/emqx/etc
+      - vol-emqx-log:/opt/emqx/log
+    environment:
+      TZ: ${TZ:-America/Mexico_City}
+      EMQX_NAME: smartlabs-emqx
+      EMQX_HOST: 0.0.0.0
+      
+      # Dashboard configuration
+      EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USER:-admin}
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-emqxpass}
+      
+      # Authentication
+      EMQX_ALLOW_ANONYMOUS: "false"
+      EMQX_NOMATCH: "deny"
+      
+      # MySQL Authentication
+      EMQX_AUTH__MYSQL__SERVER: "mariadb_host:3306"
+      EMQX_AUTH__MYSQL__USERNAME: ${MARIADB_USER}
+      EMQX_AUTH__MYSQL__PASSWORD: ${MARIADB_PASSWORD}
+      EMQX_AUTH__MYSQL__DATABASE: ${MARIADB_DATABASE}
+      
+      # Connection limits
+      EMQX_LISTENER__TCP__EXTERNAL__MAX_CONNECTIONS: 1000
+      EMQX_LISTENER__SSL__EXTERNAL__MAX_CONNECTIONS: 1000
+      EMQX_LISTENER__WS__EXTERNAL__MAX_CONNECTIONS: 1000
+      EMQX_LISTENER__WSS__EXTERNAL__MAX_CONNECTIONS: 1000
+    networks:
+      smartlabs-network:
+        aliases:
+          - emqx_host
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      interval: 5s
+      timeout: 25s
+      retries: 5
+
+  # Aplicación Web PHP
+  smartlabs-web:
+    container_name: smartlabs-web-app
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    depends_on:
+      - mariadb
+      - emqx
+    restart: unless-stopped
+    ports:
+      - "${WEB_APP_PORT:-80}:80"
+    volumes:
+      - ./app:/var/www/html/app
+      - ./config:/var/www/html/config
+      - ./public:/var/www/html/public
+      - ./assets:/var/www/html/assets
+      - ./views:/var/www/html/views
+      - ./libs:/var/www/html/libs
+      - app-logs:/var/www/html/logs
+    environment:
+      - TZ=${TZ:-America/Mexico_City}
+      - APP_ENV=${APP_ENV:-production}
+      - DB_HOST=mariadb_host
+      - DB_PORT=3306
+      - DB_DATABASE=${MARIADB_DATABASE}
+      - DB_USERNAME=${MARIADB_USER}
+      - DB_PASSWORD=${MARIADB_PASSWORD}
+      - MQTT_HOST=emqx_host
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-smartlabs}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-smartlabs123}
+    networks:
+      smartlabs-network:
+        aliases:
+          - web_host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API REST para Flutter
+  smartlabs-flutter-api:
+    container_name: smartlabs-flutter-api
+    build:
+      context: ./flutter-api
+      dockerfile: ../docker/api/Dockerfile
+    depends_on:
+      - mariadb
+      - emqx
+    restart: unless-stopped
+    ports:
+      - "${FLUTTER_API_PORT:-3000}:3000"
+    volumes:
+      - ./flutter-api/src:/app/src
+      - app-logs:/app/logs
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3000
+      - DB_HOST=mariadb_host
+      - DB_PORT=3306
+      - DB_DATABASE=${MARIADB_DATABASE}
+      - DB_USER=emqxuser
+      - DB_PASSWORD=emqxpass
+      - DB_LOCAL_HOST=mariadb_host
+      - DB_LOCAL_PORT=3306
+      - DB_LOCAL_USER=emqxuser
+      - DB_LOCAL_PASSWORD=emqxpass
+      - DB_LOCAL_NAME=${MARIADB_DATABASE}
+      - MQTT_HOST=emqx_host
+      - MQTT_PORT=1883
+      - MQTT_USERNAME=${MQTT_USERNAME:-smartlabs}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-smartlabs123}
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
+      - API_RATE_LIMIT=${API_RATE_LIMIT:-100}
+    networks:
+      smartlabs-network:
+        aliases:
+          - flutter_api_host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Servicio de Monitoreo en Tiempo Real (WebSocket)
+  smartlabs-device-monitor:
+    container_name: smartlabs-device-monitor
+    build:
+      context: ./node
+      dockerfile: ../docker/monitor/Dockerfile
+    depends_on:
+      - mariadb
+    restart: unless-stopped
+    ports:
+      - "${DEVICE_MONITOR_PORT:-8080}:8080"
+    volumes:
+      - ./node/src:/app/src
+      - ./node/scripts:/app/scripts
+      - app-logs:/app/logs
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - WS_PORT=8080
+      - DB_HOST=mariadb_host
+      - DB_PORT=3306
+      - DB_DATABASE=${MARIADB_DATABASE}
+      - DB_USERNAME=${MARIADB_USER}
+      - DB_PASSWORD=${MARIADB_PASSWORD}
+    networks:
+      smartlabs-network:
+        aliases:
+          - device_monitor_host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx como Reverse Proxy (Opcional)
+  nginx:
+    container_name: smartlabs-nginx
+    image: nginx:1.25-alpine
+    depends_on:
+      - smartlabs-web
+      - smartlabs-flutter-api
+      - smartlabs-device-monitor
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-8000}:80"
+      - "${NGINX_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+    networks:
+      smartlabs-network:
+        aliases:
+          - nginx_host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Servicios opcionales comentados para evitar errores de construcción
+  # Descomenta según necesites
+  
+  # fluentd:
+  #   container_name: smartlabs-fluentd
+  #   build:
+  #     context: ./docker/fluentd
+  #     dockerfile: Dockerfile
+  #   volumes:
+  #     - app-logs:/fluentd/log
+  #     - ./docker/fluentd/conf:/fluentd/etc
+  #   ports:
+  #     - "${FLUENTD_PORT:-24224}:24224"
+  #   networks:
+  #     smartlabs-network:
+  #       aliases:
+  #         - fluentd_host
+  #   restart: unless-stopped
+
+  # prometheus:
+  #   container_name: smartlabs-prometheus
+  #   image: prom/prometheus:v2.48.0
+  #   ports:
+  #     - "${PROMETHEUS_PORT:-9090}:9090"
+  #   volumes:
+  #     - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/etc/prometheus/console_libraries'
+  #     - '--web.console.templates=/etc/prometheus/consoles'
+  #     - '--storage.tsdb.retention.time=200h'
+  #     - '--web.enable-lifecycle'
+  #   networks:
+  #     smartlabs-network:
+  #       aliases:
+  #         - prometheus_host
+  #   restart: unless-stopped
+
+  # grafana:
+  #   container_name: smartlabs-grafana
+  #   image: grafana/grafana:10.2.2
+  #   depends_on:
+  #     - prometheus
+  #   ports:
+  #     - "${GRAFANA_PORT:-3001}:3000"
+  #   volumes:
+  #     - ./docker/grafana/provisioning:/etc/grafana/provisioning
+  #     - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   networks:
+  #     - smartlabs-network:
+  #       aliases:
+  #         - grafana_host
+  #   restart: unless-stopped

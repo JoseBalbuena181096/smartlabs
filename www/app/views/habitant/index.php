@@ -651,11 +651,11 @@ if (hostname === 'localhost' || hostname === '127.0.0.1') {
     console.log('📡 Configuración MQTT: Acceso local detectado (WSS)');
 } else if (hostname === '192.168.0.100') {
     // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
-    MQTT_WS_URL = 'ws://192.168.0.100:8073/mqtt';
+    MQTT_WS_URL = 'ws://192.168.0.100:8083/mqtt';
     console.log('📡 Configuración MQTT: Acceso desde red externa detectado (WS)');
 } else {
     // Fallback - usar WS no seguro
-    MQTT_WS_URL = `ws://${hostname}:8073/mqtt`;
+    MQTT_WS_URL = `ws://${hostname}:8083/mqtt`;
     console.log('📡 Configuración MQTT: Usando hostname dinámico (WS)');
 }
 

@@ -25,7 +25,7 @@ window.deviceStatusWS = {
  */
 function initDeviceStatusWS(serverUrl) {
     // URL por defecto usando configuración automática
-    const wsUrl = serverUrl || (window.DeviceStatusConfig ? window.DeviceStatusConfig.websocket.getUrl() : 'ws://localhost:3000');
+    const wsUrl = serverUrl || (window.DeviceStatusConfig ? window.DeviceStatusConfig.websocket.getUrl() : 'ws://localhost:8086');
     
     console.log('Inicializando conexión WebSocket a:', wsUrl);
     
@@ -94,7 +94,7 @@ function initDeviceStatusWS(serverUrl) {
                 
                 setTimeout(function() {
                     // Usar configuración automática para la reconexión
-                    const reconnectUrl = window.DeviceStatusConfig ? window.DeviceStatusConfig.websocket.getUrl() : 'ws://localhost:3000';
+                    const reconnectUrl = window.DeviceStatusConfig ? window.DeviceStatusConfig.websocket.getUrl() : 'ws://localhost:8086';
                     initDeviceStatusWS(reconnectUrl);
                 }, window.deviceStatusWS.reconnectInterval);
             } else {
@@ -304,7 +304,7 @@ function initDeviceStatusMQTT(brokerUrl) {
             console.log('📡 Configuración MQTT: Acceso local detectado');
         } else if (hostname === '192.168.0.100') {
             // Acceso desde IP externa - usar IP externa  
-            mqttUrl = 'ws://192.168.0.100:8073/mqtt';
+            mqttUrl = 'ws://192.168.0.100:8083/mqtt';
             console.log('📡 Configuración MQTT: Acceso desde red externa detectado');
         } else {
             // Fallback - usar el mismo hostname

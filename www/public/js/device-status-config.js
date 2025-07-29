@@ -20,7 +20,7 @@ window.DeviceStatusConfig = {
             
             // Si accedemos desde localhost, usar localhost para WebSocket
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
-                return 'ws://localhost:3000';
+                return 'ws://localhost:8086';
             }
             // Si accedemos desde la IP externa (192.168.0.100)
             else if (hostname === '192.168.0.100') {
@@ -31,18 +31,18 @@ window.DeviceStatusConfig = {
                     // Intentar detectar si somos el servidor verificando la IP local
                     const isServer = this.isLocalServer();
                     if (isServer) {
-                        return 'ws://localhost:3000';
+                        return 'ws://localhost:8086';
                     } else {
-                        return 'ws://192.168.0.100:3000';
+                        return 'ws://192.168.0.100:8086';
                     }
                 } catch (e) {
                     // Fallback: usar la IP externa
-                    return 'ws://192.168.0.100:3000';
+                    return 'ws://192.168.0.100:8086';
                 }
             }
             // Fallback: usar el mismo hostname que la página web
             else {
-                return `ws://${hostname}:3000`;
+                return `ws://${hostname}:8086`;
             }
         },
         
@@ -94,7 +94,7 @@ window.DeviceStatusConfig = {
                 return url;
             } else if (hostname === '192.168.0.100') {
                 // Acceso desde IP externa - usar IP externa con puerto mapeado
-                const url = `${protocol}//192.168.0.100:8073/mqtt`;
+                const url = `${protocol}//192.168.0.100:8083/mqtt`;
                 console.log('📡 Configuración MQTT: Acceso desde red externa detectado');
                 return url;
             } else {

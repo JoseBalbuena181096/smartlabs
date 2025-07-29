@@ -1,9 +1,9 @@
 <?php
 return [
-    'host' => '192.168.0.100',
-    'username' => 'root',
+    'host' => 'mariadb',
+    'username' => 'emqxuser',
     'password' => 'emqxpass',
     'database' => 'emqx',
-    'port' => '4000',
+    'port' => '3306',
     'charset' => 'utf8mb4'
-]; 
+];

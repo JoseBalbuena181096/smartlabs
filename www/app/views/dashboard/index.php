@@ -878,7 +878,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('📡 Configuración MQTT: Acceso local detectado');
       } else if (hostname === '192.168.0.100') {
         // Acceso desde IP externa - usar IP externa
-        mqttUrl = 'ws://192.168.0.100:8073/mqtt';
+        mqttUrl = 'ws://192.168.0.100:8083/mqtt';
         console.log('📡 Configuración MQTT: Acceso desde red externa detectado');
       } else {
         // Fallback - usar el mismo hostname

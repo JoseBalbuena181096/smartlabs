@@ -16,7 +16,18 @@ const deviceConfig = require('../../config/device-status');
 
 // Configuración del servidor WebSocket
 const PORT = process.env.PORT || deviceConfig.websocket.port;
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+    // Endpoint de health check
+    if (req.url === '/health' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+        return;
+    }
+    
+    // Para otras rutas, devolver 404
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+});
 const wss = new WebSocket.Server({ server });
 
 // Usar configuraciones centralizadas
@@ -66,6 +77,7 @@ async function startMonitoring() {
 // Consultar estado de todos los dispositivos
 async function checkAllDevicesStatus() {
     try {
+        console.log('🔍 Ejecutando consulta de dispositivos...');
         const query = `
             SELECT t.traffic_device, t.traffic_state, t.traffic_date, 
                    h.hab_name, h.hab_registration, h.hab_email
@@ -79,6 +91,7 @@ async function checkAllDevicesStatus() {
         `;
         
         const [results] = await dbConnection.execute(query);
+        console.log(`📊 Consulta ejecutada: ${results.length} dispositivos encontrados`);
         
         // Actualizar estado global
         results.forEach(device => {
@@ -116,7 +129,19 @@ async function checkAllDevicesStatus() {
         }
         
     } catch (error) {
-        console.error('❌ Error consultando estado de dispositivos:', error);
+        console.error('❌ Error consultando estado de dispositivos:', error.message);
+        console.error('❌ Stack trace:', error.stack);
+        
+        // Intentar reconectar si hay error de conexión
+        if (error.code === 'PROTOCOL_CONNECTION_LOST' || error.code === 'ECONNRESET') {
+            console.log('🔄 Intentando reconectar a la base de datos...');
+            try {
+                dbConnection = await connectToDatabase();
+                console.log('✅ Reconexión exitosa');
+            } catch (reconnectError) {
+                console.error('❌ Error en reconexión:', reconnectError.message);
+            }
+        }
     }
 }
 
