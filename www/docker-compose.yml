@@ -185,25 +185,82 @@ services:
     volumes:
       - ./flutter-api/src:/app/src
       - app-logs:/app/logs
+    # Límites de recursos para prevenir freezing
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
+      - TZ=${TZ:-America/Mexico_City}
+      
+      # Configuración de Base de Datos
       - DB_HOST=mariadb_host
       - DB_PORT=3306
       - DB_DATABASE=${MARIADB_DATABASE}
       - DB_USER=emqxuser
       - DB_PASSWORD=emqxpass
-      - DB_LOCAL_HOST=mariadb_host
-      - DB_LOCAL_PORT=3306
-      - DB_LOCAL_USER=emqxuser
-      - DB_LOCAL_PASSWORD=emqxpass
-      - DB_LOCAL_NAME=${MARIADB_DATABASE}
+      - DB_CHARSET=utf8mb4
+      
+      # Pool de Conexiones DB
+      - DB_CONNECTION_LIMIT=${DB_CONNECTION_LIMIT:-10}
+      - DB_ACQUIRE_TIMEOUT=${DB_ACQUIRE_TIMEOUT:-60000}
+      - DB_TIMEOUT=${DB_TIMEOUT:-60000}
+      - DB_IDLE_TIMEOUT=${DB_IDLE_TIMEOUT:-300000}
+      - DB_MAX_RECONNECTS=${DB_MAX_RECONNECTS:-3}
+      
+      # Base de Datos Fallback
+      - DB_FALLBACK_HOST=mariadb_host
+      - DB_FALLBACK_PORT=3306
+      - DB_FALLBACK_USER=emqxuser
+      - DB_FALLBACK_PASSWORD=emqxpass
+      - DB_FALLBACK_NAME=${MARIADB_DATABASE}
+      
+      # Configuración MQTT
       - MQTT_HOST=emqx_host
       - MQTT_PORT=1883
       - MQTT_USERNAME=${MQTT_USERNAME:-smartlabs}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-smartlabs123}
+      - MQTT_CONNECT_TIMEOUT=${MQTT_CONNECT_TIMEOUT:-30000}
+      - MQTT_RECONNECT_PERIOD=${MQTT_RECONNECT_PERIOD:-5000}
+      - MQTT_KEEPALIVE=${MQTT_KEEPALIVE:-60}
+      
+      # Configuración de Timeouts
+      - API_TIMEOUT=${API_TIMEOUT:-30000}
+      - DB_TIMEOUT=${DB_TIMEOUT:-15000}
+      - MQTT_TIMEOUT=${MQTT_TIMEOUT:-10000}
+      - AUTH_TIMEOUT=${AUTH_TIMEOUT:-5000}
+      - UPLOAD_TIMEOUT=${UPLOAD_TIMEOUT:-60000}
+      
+      # Rate Limiting
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-900000}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-100}
+      
+      # Parsing
+      - JSON_LIMIT=${JSON_LIMIT:-10mb}
+      - URL_ENCODED_LIMIT=${URL_ENCODED_LIMIT:-10mb}
+      
+      # CORS
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      
+      # Autenticación
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
-      - API_RATE_LIMIT=${API_RATE_LIMIT:-100}
+      - API_KEY=${API_KEY:-your-api-key-here}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FILE_MAX_SIZE=${LOG_FILE_MAX_SIZE:-20m}
+      - LOG_FILE_MAX_FILES=${LOG_FILE_MAX_FILES:-14d}
+      
+      # Monitoreo
+      - HEALTH_CHECK_INTERVAL=${HEALTH_CHECK_INTERVAL:-30000}
+      - MEMORY_THRESHOLD=${MEMORY_THRESHOLD:-512}
+      - CPU_THRESHOLD=${CPU_THRESHOLD:-80}
     networks:
       smartlabs-network:
         aliases:
@@ -211,8 +268,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
-      timeout: 10s
-      retries: 3
+      timeout: 15s
+      retries: 5
+      start_period: 40s
 
   # Servicio de Monitoreo en Tiempo Real (WebSocket)
   smartlabs-device-monitor:

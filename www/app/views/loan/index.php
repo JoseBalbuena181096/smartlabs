@@ -19,6 +19,11 @@ include __DIR__ . '/../layout/header.php';
       
       <!-- Page title -->
       <div class="mb-0 h5 no-wrap" id="pageTitle">Sistema de Autopréstamo SMARTLABS</div>
+      
+      <!-- Estado MQTT -->
+      <div class="ml-3">
+        <span id="mqtt_status"><span class="badge badge-secondary">MQTT Iniciando...</span></span>
+      </div>
 
       <!-- navbar collapse -->
       <div class="collapse navbar-collapse" id="collapse">
@@ -301,92 +306,22 @@ function process_msg(topic, message){
 
 /*
 ******************************
-****** CONEXION MQTT *********
+****** CONEXION MQTT MEJORADA *
 ******************************
 */
-// Opciones de conexión
-const options = {
-    // Autenticación
-    clientId: 'iotmc'+generarCadenaAleatoria(6),
-    username: 'jose',
-    password: 'public',
-    keepalive: 60,
-    clean: true,
-    connectTimeout: 4000,
-}
+// NOTA: El cliente MQTT mejorado se inicializa automáticamente desde loan-mqtt-improved.js
+// Este código mantiene compatibilidad con el código existente
 
+// Variables globales para compatibilidad
 var connected = false;
+var client = null;
 
-// Configuración dinámica de URL MQTT WebSocket
-let WebSocket_URL;
-const hostname = window.location.hostname;
-
-console.log('🔧 Detectando configuración MQTT para hostname:', hostname);
-
-// Determinar URL correcta basada en el hostname
-if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Acceso desde localhost - usar WSS seguro
-    WebSocket_URL = 'wss://localhost:8074/mqtt';
-    console.log('📡 Configuración MQTT: Acceso local detectado (WSS)');
-} else if (hostname === '192.168.0.100') {
-    // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
-    WebSocket_URL = 'ws://192.168.0.100:8083/mqtt';
-    console.log('📡 Configuración MQTT: Acceso desde red externa detectado (WS)');
-} else {
-    // Fallback - usar WS no seguro
-    WebSocket_URL = `ws://${hostname}:8073/mqtt`;
-    console.log('📡 Configuración MQTT: Usando hostname dinámico (WS)');
+// Función de compatibilidad para process_msg (mantenida para el código existente)
+function process_msg(topic, message) {
+    // Esta función ahora es manejada por el cliente MQTT mejorado
+    // pero se mantiene para compatibilidad con código legacy
+    console.log('⚠️ process_msg legacy llamada:', topic, message.toString());
 }
-
-console.log('📡 URL MQTT WebSocket:', WebSocket_URL);
-const client = mqtt.connect(WebSocket_URL, options);
-
-client.on('connect', () => {
-    console.log('MQTT conectado por WS! Éxito!')
-    connected = true;
-
-    // Suscribirse a los topics de préstamos
-    client.subscribe('+/loan_queryu', { qos: 0 }, (error) => {
-        if (error) {
-            console.log('Error suscribiendo a loan_queryu:', error);
-        } else {
-            console.log('Suscrito a +/loan_queryu');
-        }
-    });
-    
-    client.subscribe('+/loan_querye', { qos: 0 }, (error) => {
-        if (error) {
-            console.log('Error suscribiendo a loan_querye:', error);
-        } else {
-            console.log('Suscrito a +/loan_querye');
-        }
-    });
-
-    // Publicar mensaje de conexión
-    client.publish('fabrica', 'Sistema de préstamos conectado', (error) => {
-      console.log(error || 'Mensaje de conexión enviado');
-    })
-})
-
-client.on('message', (topic, message) => {
-  console.log('Mensaje recibido bajo tópico: ', topic, ' -> ', message.toString());
-  process_msg(topic, message);
-})
-
-client.on('reconnect', (error) => {
-    console.log('Intentando reconectar MQTT...', error)
-    connected = false;
-})
-
-client.on('error', (error) => {
-    console.log('Error de conexión MQTT:', error)
-    connected = false;
-})
-
-client.on('disconnect', () => {
-    console.log('MQTT desconectado')
-    connected = false;
-})
 
 /*
 ******************************

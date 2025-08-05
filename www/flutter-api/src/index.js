@@ -22,6 +22,8 @@ const { router: internalRoutes } = require('./routes/internalRoutes');
 // Importar middleware
 const { optionalAuth } = require('./middleware/auth');
 const { errorHandler, notFoundHandler, requestLogger } = require('./middleware/errorHandler');
+const TimeoutMiddleware = require('./middleware/timeoutMiddleware');
+const { asyncHandler } = require('./utils/asyncHandler');
 
 /**
  * Aplicación principal SMARTLABS Flutter API
@@ -37,12 +39,27 @@ class SmartLabsFlutterAPI {
      * Configura middlewares de la aplicación
      */
     setupMiddlewares() {
+        // Middleware de logging de requests
+        this.app.use(requestLogger);
+        
+        // Timeout global para todas las requests
+        this.app.use(TimeoutMiddleware.api(parseInt(process.env.API_TIMEOUT) || 30000));
+        
         // Seguridad
         this.app.use(helmet({
+            contentSecurityPolicy: {
+                directives: {
+                    defaultSrc: ["'self'"],
+                    styleSrc: ["'self'", "'unsafe-inline'"],
+                    scriptSrc: ["'self'"],
+                    imgSrc: ["'self'", "data:", "https:"],
+                },
+            },
+            crossOriginEmbedderPolicy: false,
             crossOriginResourcePolicy: { policy: "cross-origin" }
         }));
         
-        // CORS - Permitir acceso desde Flutter
+        // CORS mejorado - Permitir acceso desde Flutter
         this.app.use(cors({
             origin: [
                 'http://localhost:3000', 
@@ -63,49 +80,158 @@ class SmartLabsFlutterAPI {
                 /^http:\/\/127\.0\.0\.1:\d+$/,
                 /^http:\/\/192\.168\.0\.100:\d+$/
             ],
-            methods: ['GET', 'POST', 'PUT', 'DELETE'],
-            allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key'],
+            methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+            allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'X-Requested-With'],
+            exposedHeaders: ['X-Total-Count', 'X-Response-Time'],
             credentials: true
         }));
         
-        // Rate limiting
+        // Rate limiting mejorado
         const limiter = rateLimit({
-            windowMs: 15 * 60 * 1000, // 15 minutos
-            max: 100, // máximo 100 requests por ventana
+            windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) || 15 * 60 * 1000, // 15 minutos
+            max: parseInt(process.env.RATE_LIMIT_MAX) || 100, // máximo requests por ventana
             message: {
                 success: false,
+                error: 'RATE_LIMIT_EXCEEDED',
                 message: 'Demasiadas solicitudes, intenta de nuevo más tarde',
-                error: 'Rate limit excedido'
+                retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW) || 15 * 60 * 1000) / 1000)
             },
             standardHeaders: true,
-            legacyHeaders: false
+            legacyHeaders: false,
+            skip: (req) => {
+                // Saltar rate limiting para health check
+                return req.path === '/health';
+            }
         });
         this.app.use('/api/', limiter);
         
-        // Parsing
-        this.app.use(express.json({ limit: '10mb' }));
-        this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+        // Parsing JSON con límites configurables
+        this.app.use(express.json({ 
+            limit: process.env.JSON_LIMIT || '10mb',
+            verify: (req, res, buf) => {
+                // Agregar raw body para verificaciones si es necesario
+                req.rawBody = buf;
+            }
+        }));
+        this.app.use(express.urlencoded({ 
+            extended: true, 
+            limit: process.env.URL_ENCODED_LIMIT || '10mb' 
+        }));
         
-        // Logging
-        this.app.use(requestLogger);
+        // Middleware para agregar información de timing
+        this.app.use((req, res, next) => {
+            req.startTime = Date.now();
+            
+            // Agregar header de response time al finalizar
+            const originalSend = res.send;
+            res.send = function(data) {
+                const responseTime = Date.now() - req.startTime;
+                res.set('X-Response-Time', `${responseTime}ms`);
+                originalSend.call(this, data);
+            };
+            
+            next();
+        });
     }
 
     /**
      * Configura las rutas de la API
      */
     setupRoutes() {
-        // Ruta de salud
-        this.app.get('/health', (req, res) => {
-            res.json({
-                success: true,
-                message: 'SMARTLABS Flutter API funcionando correctamente',
-                data: {
-                    status: 'healthy',
-                    timestamp: new Date().toISOString(),
-                    version: '1.0.0',
-                    environment: process.env.NODE_ENV || 'development'
+        // Health check endpoint mejorado
+        this.app.get('/health', async (req, res) => {
+            const startTime = Date.now();
+            
+            try {
+                // Verificar estado de la base de datos
+                let dbStatus = 'disconnected';
+                let dbStats = {};
+                try {
+                    if (this.db && this.db.getPoolStats) {
+                        dbStats = this.db.getPoolStats();
+                        dbStatus = dbStats.connectionCount > 0 ? 'connected' : 'disconnected';
+                    }
+                } catch (dbError) {
+                    console.warn('⚠️ Error verificando DB en health check:', dbError.message);
                 }
-            });
+                
+                // Verificar estado MQTT
+                let mqttStatus = 'disconnected';
+                let mqttStats = {};
+                try {
+                    if (this.mqtt && this.mqtt.getConnectionStats) {
+                        mqttStats = this.mqtt.getConnectionStats();
+                        mqttStatus = mqttStats.connected ? 'connected' : 'disconnected';
+                    }
+                } catch (mqttError) {
+                    console.warn('⚠️ Error verificando MQTT en health check:', mqttError.message);
+                }
+                
+                // Estadísticas del sistema
+                const memUsage = process.memoryUsage();
+                const cpuUsage = process.cpuUsage();
+                
+                const healthData = {
+                    status: 'OK',
+                    timestamp: new Date().toISOString(),
+                    uptime: process.uptime(),
+                    environment: process.env.NODE_ENV || 'development',
+                    version: process.env.npm_package_version || '1.0.0',
+                    responseTime: Date.now() - startTime,
+                    services: {
+                        database: {
+                            status: dbStatus,
+                            ...dbStats
+                        },
+                        mqtt: {
+                            status: mqttStatus,
+                            ...mqttStats
+                        }
+                    },
+                    system: {
+                        memory: {
+                            used: Math.round(memUsage.heapUsed / 1024 / 1024),
+                            total: Math.round(memUsage.heapTotal / 1024 / 1024),
+                            external: Math.round(memUsage.external / 1024 / 1024),
+                            rss: Math.round(memUsage.rss / 1024 / 1024)
+                        },
+                        cpu: {
+                            user: cpuUsage.user,
+                            system: cpuUsage.system
+                        },
+                        nodeVersion: process.version,
+                        platform: process.platform,
+                        arch: process.arch
+                    }
+                };
+                
+                // Determinar estado general
+                const overallHealthy = dbStatus === 'connected' && mqttStatus === 'connected';
+                const statusCode = overallHealthy ? 200 : 503;
+                
+                if (!overallHealthy) {
+                    healthData.status = 'DEGRADED';
+                    healthData.issues = [];
+                    
+                    if (dbStatus !== 'connected') {
+                        healthData.issues.push('Database connection issue');
+                    }
+                    if (mqttStatus !== 'connected') {
+                        healthData.issues.push('MQTT connection issue');
+                    }
+                }
+                
+                res.status(statusCode).json(healthData);
+                
+            } catch (error) {
+                console.error('❌ Error en health check:', error);
+                res.status(500).json({
+                    status: 'ERROR',
+                    timestamp: new Date().toISOString(),
+                    error: error.message,
+                    responseTime: Date.now() - startTime
+                });
+            }
         });
 
         // Ruta de información de la API

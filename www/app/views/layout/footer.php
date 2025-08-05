@@ -1,4 +1,4 @@
-    </div>
+</div>
 
     <!-- Scripts -->
     <script src="/libs/jquery/jquery/dist/jquery.js"></script>
@@ -24,6 +24,7 @@
     <!-- MQTT y AJAX para SMARTLABS -->
     <script src="/public/js/config.js"></script>
     <script src="/public/js/mqtt-client.js"></script>
+    <script src="/public/js/loan-mqtt-improved.js"></script>
     <script src="/public/js/smartlabs-ajax.js"></script>
 
     <!-- Scripts personalizados -->
@@ -40,4 +41,4 @@
     <?php endif; ?>
 
   </body>
-</html> 
+</html>
