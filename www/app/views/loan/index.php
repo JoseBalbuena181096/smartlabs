@@ -413,12 +413,16 @@ function processRfidWithSessionLogic(rfid, deviceSerial) {
 /**
  * Valida un RFID usando la API Flutter
  */
-function validateRfidWithApi(rfid) {
+function validateRfidWithApi(rfid, retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 segundos
+    
     return new Promise(function(resolve, reject) {
         $.ajax({
             url: 'http://192.168.0.100:3000/api/users/rfid/' + encodeURIComponent(rfid),
             method: 'GET',
-            timeout: 5000,
+            timeout: 10000, // Aumentado a 10 segundos
+            cache: false,
             success: function(response) {
                 if (response.success && response.data) {
                     console.log('✅ Usuario encontrado:', response.data.name);
@@ -429,11 +433,31 @@ function validateRfidWithApi(rfid) {
                 }
             },
             error: function(xhr, status, error) {
-                console.error('❌ Error validando RFID:', error);
+                console.error('❌ Error validando RFID:', { xhr, status, error, retryCount });
+                
+                // Si es 404, no reintentar
                 if (xhr.status === 404) {
-                    resolve(false); // RFID no encontrado
+                    resolve(false);
+                    return;
+                }
+                
+                // Si es error de sesión, manejar apropiadamente
+                if (xhr.status === 401 || xhr.status === 403) {
+                    console.log('🔒 Error de autenticación detectado');
+                    reject({ type: 'auth_error', error });
+                    return;
+                }
+                
+                // Reintentar si no hemos alcanzado el máximo
+                if (retryCount < maxRetries) {
+                    console.log(`🔄 Reintentando validación RFID (${retryCount + 1}/${maxRetries})`);
+                    setTimeout(() => {
+                        validateRfidWithApi(rfid, retryCount + 1)
+                            .then(resolve)
+                            .catch(reject);
+                    }, retryDelay * (retryCount + 1)); // Backoff exponencial
                 } else {
-                    reject(error); // Error de conexión u otro
+                    reject({ type: 'network_error', error });
                 }
             }
         });
@@ -443,13 +467,18 @@ function validateRfidWithApi(rfid) {
 /**
  * Consulta el estado actual de la sesión usando la API Flutter
  */
-function checkSessionState() {
+function checkSessionState(retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 2000;
+    
     return new Promise(function(resolve, reject) {
         $.ajax({
             url: 'http://192.168.0.100:3000/api/prestamo/estado/',
             method: 'GET',
-            timeout: 5000,
+            timeout: 10000, // Aumentado a 10 segundos
+            cache: false,
             success: function(response) {
+                console.log('✅ Estado de sesión verificado:', response);
                 if (response.success) {
                     resolve(response.data);
                 } else {
@@ -457,8 +486,26 @@ function checkSessionState() {
                 }
             },
             error: function(xhr, status, error) {
-                console.error('❌ Error consultando estado de sesión:', error);
-                reject(error);
+                console.error('❌ Error verificando estado de sesión:', { xhr, status, error, retryCount });
+                
+                // Si es error de autenticación, no reintentar
+                if (xhr.status === 401 || xhr.status === 403) {
+                    console.log('🔒 Error de autenticación en estado de sesión');
+                    reject({ type: 'auth_error', error });
+                    return;
+                }
+                
+                // Reintentar si no hemos alcanzado el máximo
+                if (retryCount < maxRetries) {
+                    console.log(`🔄 Reintentando verificación de estado (${retryCount + 1}/${maxRetries})`);
+                    setTimeout(() => {
+                        checkSessionState(retryCount + 1)
+                            .then(resolve)
+                            .catch(reject);
+                    }, retryDelay * (retryCount + 1));
+                } else {
+                    reject({ type: 'network_error', error });
+                }
             }
         });
     });
@@ -469,20 +516,45 @@ function checkSessionState() {
 /**
  * Consulta los préstamos de un usuario
  */
-function consultarPrestamosUsuario(rfid) {
+function consultarPrestamosUsuario(rfid, retryCount = 0) {
+    const maxRetries = 3;
+    const retryDelay = 2000;
+    
     $.ajax({
         url: '/Loan/index',
         method: 'POST',
         data: { consult_loan: rfid },
+        timeout: 15000, // 15 segundos para operaciones de base de datos
+        cache: false,
+        beforeSend: function() {
+            console.log('🔄 Consultando préstamos para RFID:', rfid);
+        },
         success: function(data) {
             $('#resultado_').html(""); 
             var data_ = cortarDespuesDeDoctype(data);
             $('#resultado_').html(data_);
             console.log("✅ Préstamos consultados para:", rfid);
         },
-        error: function() {
-            $('#resultado_').html('<div class="alert alert-danger">Error al consultar préstamos</div>');
-            console.error('❌ Error consultando préstamos para:', rfid);
+        error: function(xhr, status, error) {
+            console.error('❌ Error consultando préstamos:', { xhr, status, error, retryCount });
+            
+            // Si es error de autenticación, redirigir al login
+            if (xhr.status === 401 || xhr.status === 403) {
+                console.log('🔒 Error de autenticación, redirigiendo al login');
+                window.location.href = '/Auth/login';
+                return;
+            }
+            
+            // Reintentar si no hemos alcanzado el máximo
+            if (retryCount < maxRetries) {
+                console.log(`🔄 Reintentando consulta de préstamos (${retryCount + 1}/${maxRetries})`);
+                setTimeout(() => {
+                    consultarPrestamosUsuario(rfid, retryCount + 1);
+                }, retryDelay * (retryCount + 1));
+            } else {
+                $('#resultado_').html('<div class="alert alert-danger">Error al consultar préstamos después de varios intentos. Por favor, recarga la página.</div>');
+                console.error('❌ Error consultando préstamos para:', rfid);
+            }
         }
     });
 }

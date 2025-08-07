@@ -59,6 +59,41 @@ class AuthController extends Controller {
         $this->redirect('Auth/login');
     }
     
+    /**
+     * Endpoint para mantener la sesión activa (keep-alive)
+     */
+    public function keepalive() {
+        // Verificar que la sesión esté activa
+        if (!isset($_SESSION['logged']) || $_SESSION['logged'] !== true) {
+            $this->json([
+                'success' => false,
+                'message' => 'Sesión no válida',
+                'redirect' => '/Auth/login'
+            ]);
+            return;
+        }
+        
+        // Actualizar timestamp de última actividad (sesión permanente)
+        $_SESSION['last_activity'] = time();
+        $_SESSION['permanent_session'] = true;
+        
+        // Regenerar ID de sesión cada 24 horas por seguridad (sesión permanente)
+        if (!isset($_SESSION['last_regeneration'])) {
+            $_SESSION['last_regeneration'] = time();
+        } elseif (time() - $_SESSION['last_regeneration'] > 86400) { // 24 horas
+            session_regenerate_id(true);
+            $_SESSION['last_regeneration'] = time();
+        }
+        
+        $this->json([
+            'success' => true,
+            'message' => 'Sesión permanente activa',
+            'timestamp' => time(),
+            'session_id' => session_id(),
+            'permanent' => true
+        ]);
+    }
+    
     public function register() {
         $msg = "";
         $email = "";
@@ -99,4 +134,4 @@ class AuthController extends Controller {
             'email' => $email
         ]);
     }
-} 
+}

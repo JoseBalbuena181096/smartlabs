@@ -23,6 +23,7 @@
 
     <!-- MQTT y AJAX para SMARTLABS -->
     <script src="/public/js/config.js"></script>
+    <script src="/public/js/session-keepalive.js"></script>
     <script src="/public/js/mqtt-client.js"></script>
     <script src="/public/js/loan-mqtt-improved.js"></script>
     <script src="/public/js/smartlabs-ajax.js"></script>

@@ -9,7 +9,57 @@ class Controller {
     
     protected function checkSession() {
         if (session_status() == PHP_SESSION_NONE) {
+            // Cargar configuración de sesión permanente
+            require_once __DIR__ . '/../../config/session.php';
+            
+            // Cargar configuración de sesión desde app.php
+            $config = require_once __DIR__ . '/../../config/app.php';
+            
+            // Configurar parámetros de sesión permanente
+            if (isset($config['session_config'])) {
+                $sessionConfig = $config['session_config'];
+                
+                if ($sessionConfig['gc_maxlifetime'] > 0) {
+                    ini_set('session.gc_maxlifetime', $sessionConfig['gc_maxlifetime']);
+                } else {
+                    // Sesión permanente: establecer un valor muy alto
+                    ini_set('session.gc_maxlifetime', 2147483647); // Máximo valor de 32-bit
+                }
+                
+                if ($sessionConfig['cookie_lifetime'] > 0) {
+                    ini_set('session.cookie_lifetime', $sessionConfig['cookie_lifetime']);
+                } else {
+                    // Cookie permanente hasta que se cierre el navegador
+                    ini_set('session.cookie_lifetime', 0);
+                }
+                
+                ini_set('session.gc_probability', 0); // Deshabilitar garbage collection automático
+                ini_set('session.gc_divisor', 1000);
+            }
+            
+            // Configurar parámetros de cookie de sesión permanente
+            $cookieLifetime = isset($config['session_config']['cookie_lifetime']) && $config['session_config']['cookie_lifetime'] > 0 
+                ? $config['session_config']['cookie_lifetime'] 
+                : 0;
+                
+            session_set_cookie_params([
+                'lifetime' => $cookieLifetime,
+                'path' => '/',
+                'domain' => '',
+                'secure' => false, // Cambiar a true en HTTPS
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ]);
+            
             session_start();
+            
+            // Regenerar ID de sesión cada 24 horas por seguridad (sesión permanente)
+            if (!isset($_SESSION['last_regeneration'])) {
+                $_SESSION['last_regeneration'] = time();
+            } elseif (time() - $_SESSION['last_regeneration'] > 86400) { // 24 horas
+                session_regenerate_id(true);
+                $_SESSION['last_regeneration'] = time();
+            }
         }
     }
     
@@ -59,4 +109,4 @@ class Controller {
     protected function hashPassword($password) {
         return sha1($password); // Mantengo SHA1 para compatibilidad con el sistema existente
     }
-} 
+}
