@@ -9,7 +9,15 @@ window.SmartLabsConfig = {
     
     // Configuración MQTT
     mqtt: {
-        brokerUrl: 'ws://localhost:8083/mqtt',
+        brokerUrl: (function() {
+            const hostname = window.location.hostname;
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'ws://localhost:8083/mqtt';
+            } else {
+                // Para acceso desde red (clientes), siempre usar la IP del servidor
+                return 'ws://192.168.0.100:8083/mqtt';
+            }
+        })(),
         username: 'jose',
         password: 'public',
         clientId: 'iotmc' + Math.random().toString(16).substr(2, 8),

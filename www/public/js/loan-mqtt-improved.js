@@ -68,12 +68,10 @@ class LoanMQTTClient {
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             url = 'ws://localhost:8083/mqtt';
             console.log('📡 Configuración MQTT: Acceso local detectado');
-        } else if (hostname === '192.168.0.100') {
-            url = 'ws://192.168.0.100:8083/mqtt';
-            console.log('📡 Configuración MQTT: Acceso desde red externa detectado');
         } else {
-            url = `ws://${hostname}:8083/mqtt`;
-            console.log('📡 Configuración MQTT: Usando hostname dinámico');
+            // Para acceso desde red (clientes), siempre usar la IP del servidor
+            url = 'ws://192.168.0.100:8083/mqtt';
+            console.log('📡 Configuración MQTT: Acceso desde red local/servidor detectado');
         }
         
         console.log('📡 URL MQTT WebSocket:', url);
@@ -148,6 +146,12 @@ class LoanMQTTClient {
             
             // Actualizar UI
             this.updateConnectionStatus(true);
+            
+            // Notificar al watchdog de conexión exitosa
+            if (window.connectionWatchdog) {
+                window.connectionWatchdog.state.mqttLastActivity = Date.now();
+                window.connectionWatchdog.state.mqttFailures = 0;
+            }
         });
         
         this.client.on('message', (topic, message) => {
@@ -211,6 +215,12 @@ class LoanMQTTClient {
         
         // Actualizar último heartbeat
         this.lastHeartbeat = Date.now();
+        
+        // Notificar al watchdog de actividad MQTT
+        if (window.connectionWatchdog) {
+            window.connectionWatchdog.state.mqttLastActivity = Date.now();
+            window.connectionWatchdog.state.mqttFailures = 0;
+        }
         
         if (query === 'loan_queryu') {
             this.handleLoanQueryU(message, serialNumber);
@@ -309,6 +319,11 @@ class LoanMQTTClient {
                 
                 this.publish(this.topics.heartbeat, JSON.stringify(heartbeatData));
                 
+                // Notificar al watchdog de actividad de heartbeat
+                if (window.connectionWatchdog) {
+                    window.connectionWatchdog.state.mqttLastActivity = Date.now();
+                }
+                
                 // Verificar si hemos recibido mensajes recientemente
                 const timeSinceLastMessage = Date.now() - (this.lastHeartbeat || Date.now());
                 if (timeSinceLastMessage > this.heartbeatTimer * 2) {
@@ -384,6 +399,12 @@ class LoanMQTTClient {
         console.error('❌ Error de conexión MQTT:', errorMessage);
         this.isConnected = false;
         this.updateConnectionStatus(false, 'Error: ' + errorMessage);
+        
+        // Notificar al watchdog de error de conexión
+        if (window.connectionWatchdog) {
+            window.connectionWatchdog.state.mqttFailures++;
+        }
+        
         this.scheduleReconnect();
     }
     
@@ -394,6 +415,12 @@ class LoanMQTTClient {
         this.isConnected = false;
         this.stopHeartbeat();
         this.updateConnectionStatus(false, 'Desconectado');
+        
+        // Notificar al watchdog de desconexión
+        if (window.connectionWatchdog) {
+            window.connectionWatchdog.state.mqttFailures++;
+        }
+        
         this.scheduleReconnect();
     }
     

@@ -4,7 +4,17 @@
  */
 
 class SmartLabsMQTT {
-    constructor(brokerUrl = 'ws://localhost:8083/mqtt', options = {}) {
+    constructor(brokerUrl = null, options = {}) {
+        // Configuración automática de URL si no se especifica
+        if (!brokerUrl) {
+            const hostname = window.location.hostname;
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                brokerUrl = 'ws://localhost:8083/mqtt';
+            } else {
+                // Para acceso desde red (clientes), siempre usar la IP del servidor
+                brokerUrl = 'ws://192.168.0.100:8083/mqtt';
+            }
+        }
         this.brokerUrl = brokerUrl;
         this.client = null;
         this.isConnected = false;

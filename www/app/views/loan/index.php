@@ -24,6 +24,11 @@ include __DIR__ . '/../layout/header.php';
       <div class="ml-3">
         <span id="mqtt_status"><span class="badge badge-secondary">MQTT Iniciando...</span></span>
       </div>
+      
+      <!-- Estado Watchdog -->
+      <div class="ml-3">
+        <span id="watchdog_status"><span class="badge badge-info">Watchdog Iniciando...</span></span>
+      </div>
 
       <!-- navbar collapse -->
       <div class="collapse navbar-collapse" id="collapse">
@@ -423,7 +428,19 @@ function validateRfidWithApi(rfid, retryCount = 0) {
             method: 'GET',
             timeout: 10000, // Aumentado a 10 segundos
             cache: false,
+            beforeSend: function() {
+                // Notificar al watchdog de actividad AJAX
+                if (window.connectionWatchdog) {
+                    window.connectionWatchdog.state.ajaxLastActivity = Date.now();
+                }
+            },
             success: function(response) {
+                // Notificar al watchdog de éxito
+                if (window.connectionWatchdog) {
+                    window.connectionWatchdog.state.ajaxLastActivity = Date.now();
+                    window.connectionWatchdog.state.ajaxFailures = 0;
+                }
+                
                 if (response.success && response.data) {
                     console.log('✅ Usuario encontrado:', response.data.name);
                     resolve(true);
@@ -477,7 +494,19 @@ function checkSessionState(retryCount = 0) {
             method: 'GET',
             timeout: 10000, // Aumentado a 10 segundos
             cache: false,
+            beforeSend: function() {
+                // Notificar al watchdog de actividad AJAX
+                if (window.connectionWatchdog) {
+                    window.connectionWatchdog.state.ajaxLastActivity = Date.now();
+                }
+            },
             success: function(response) {
+                // Notificar al watchdog de éxito
+                if (window.connectionWatchdog) {
+                    window.connectionWatchdog.state.ajaxLastActivity = Date.now();
+                    window.connectionWatchdog.state.ajaxFailures = 0;
+                }
+                
                 console.log('✅ Estado de sesión verificado:', response);
                 if (response.success) {
                     resolve(response.data);
@@ -528,8 +557,19 @@ function consultarPrestamosUsuario(rfid, retryCount = 0) {
         cache: false,
         beforeSend: function() {
             console.log('🔄 Consultando préstamos para RFID:', rfid);
+            
+            // Notificar al watchdog de actividad AJAX
+            if (window.connectionWatchdog) {
+                window.connectionWatchdog.state.ajaxLastActivity = Date.now();
+            }
         },
         success: function(data) {
+            // Notificar al watchdog de éxito
+            if (window.connectionWatchdog) {
+                window.connectionWatchdog.state.ajaxLastActivity = Date.now();
+                window.connectionWatchdog.state.ajaxFailures = 0;
+            }
+            
             $('#resultado_').html(""); 
             var data_ = cortarDespuesDeDoctype(data);
             $('#resultado_').html(data_);
@@ -767,6 +807,76 @@ function mostrarResultadosBusqueda(users) {
         }, 1000);
     });
 }
+
+// Función para actualizar el estado del watchdog en la UI
+function updateWatchdogStatus() {
+    if (window.connectionWatchdog) {
+        const status = window.connectionWatchdog.getStatus();
+        const watchdogElement = document.getElementById('watchdog_status');
+        
+        if (status.isActive) {
+            const mqttHealth = status.mqttHealthy ? '✅' : '❌';
+            const ajaxHealth = status.ajaxHealthy ? '✅' : '❌';
+            const uptime = Math.floor(status.uptime / 60000); // minutos
+            
+            watchdogElement.innerHTML = `<span class="badge badge-success" title="MQTT: ${mqttHealth} | AJAX: ${ajaxHealth} | Uptime: ${uptime}m">🐕 Watchdog Activo</span>`;
+        } else {
+            watchdogElement.innerHTML = '<span class="badge badge-warning">🐕 Watchdog Inactivo</span>';
+        }
+    } else {
+        const watchdogElement = document.getElementById('watchdog_status');
+        watchdogElement.innerHTML = '<span class="badge badge-secondary">🐕 Watchdog Iniciando...</span>';
+    }
+}
+
+// Actualizar estado del watchdog cada 30 segundos
+setInterval(updateWatchdogStatus, 30000);
+
+// Actualizar estado inicial después de 6 segundos (para dar tiempo a que se inicialice)
+setTimeout(updateWatchdogStatus, 6000);
+
+// Función global para obtener diagnósticos completos
+window.getDiagnostics = function() {
+    const diagnostics = {
+        timestamp: new Date().toISOString(),
+        session: {
+            keepAlive: window.sessionKeepAlive ? window.sessionKeepAlive.getStatus() : 'No disponible'
+        },
+        watchdog: window.connectionWatchdog ? window.connectionWatchdog.getStatus() : 'No disponible',
+        mqtt: {
+            improved: window.loanMqttClient ? window.loanMqttClient.getConnectionStatus() : 'No disponible',
+            legacy: window.mqttClient ? 'Disponible' : 'No disponible'
+        },
+        currentRfid: window.currentRfid || 'Ninguno',
+        pageUrl: window.location.href
+    };
+    
+    console.log('📊 Diagnósticos del Sistema:', diagnostics);
+    return diagnostics;
+};
+
+// Función global para forzar reconexión de todo
+window.forceFullReconnect = function() {
+    console.log('🔄 Forzando reconexión completa...');
+    
+    // Forzar reconexión del watchdog
+    if (window.connectionWatchdog) {
+        window.connectionWatchdog.forceReconnect();
+    }
+    
+    // Forzar reconexión MQTT
+    if (window.loanMqttClient) {
+        window.loanMqttClient.handleDisconnection();
+    }
+    
+    // Enviar keep-alive
+    if (window.sessionKeepAlive) {
+        window.sessionKeepAlive.sendKeepAlive();
+    }
+    
+    console.log('✅ Reconexión completa iniciada');
+};
+
 </script>
 
 <?php include __DIR__ . '/../layout/footer.php'; ?>
