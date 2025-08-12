@@ -17,7 +17,7 @@ class MQTTListenerService {
         
         // Configuración MQTT
         this.mqttOptions = {
-            host: process.env.MQTT_HOST || '192.168.0.100',
+            host: process.env.MQTT_HOST || process.env.SERVER_HOST || '192.168.0.100',
             port: process.env.MQTT_PORT || 1883,
             username: process.env.MQTT_USERNAME || 'jose',
             password: process.env.MQTT_PASSWORD || 'public',

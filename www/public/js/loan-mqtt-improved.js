@@ -70,7 +70,7 @@ class LoanMQTTClient {
             console.log('📡 Configuración MQTT: Acceso local detectado');
         } else {
             // Para acceso desde red (clientes), siempre usar la IP del servidor
-            url = 'ws://192.168.0.100:8083/mqtt';
+            url = window.EnvConfig ? window.EnvConfig.getMqttWsUrl() : 'ws://192.168.0.100:8083/mqtt';
             console.log('📡 Configuración MQTT: Acceso desde red local/servidor detectado');
         }
         

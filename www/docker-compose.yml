@@ -156,10 +156,12 @@ services:
       - DB_DATABASE=${MARIADB_DATABASE}
       - DB_USERNAME=${MARIADB_USER}
       - DB_PASSWORD=${MARIADB_PASSWORD}
-      - MQTT_HOST=emqx_host
+      - MQTT_HOST=${MQTT_HOST:-emqx_host}
       - MQTT_PORT=1883
       - MQTT_USERNAME=${MQTT_USERNAME:-smartlabs}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-smartlabs123}
+      - SERVER_HOST=${SERVER_HOST:-192.168.0.100}
+      - API_HOST=${API_HOST:-192.168.0.100}
     networks:
       smartlabs-network:
         aliases:
@@ -222,10 +224,14 @@ services:
       - DB_FALLBACK_NAME=${MARIADB_DATABASE}
       
       # Configuración MQTT
-      - MQTT_HOST=emqx_host
+      - MQTT_HOST=${MQTT_HOST:-emqx_host}
       - MQTT_PORT=1883
       - MQTT_USERNAME=${MQTT_USERNAME:-smartlabs}
       - MQTT_PASSWORD=${MQTT_PASSWORD:-smartlabs123}
+      
+      # Configuración del Servidor
+      - SERVER_HOST=${SERVER_HOST:-192.168.0.100}
+      - API_HOST=${API_HOST:-192.168.0.100}
       - MQTT_CONNECT_TIMEOUT=${MQTT_CONNECT_TIMEOUT:-30000}
       - MQTT_RECONNECT_PERIOD=${MQTT_RECONNECT_PERIOD:-5000}
       - MQTT_KEEPALIVE=${MQTT_KEEPALIVE:-60}

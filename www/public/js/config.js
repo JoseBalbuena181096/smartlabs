@@ -15,7 +15,7 @@ window.SmartLabsConfig = {
                 return 'ws://localhost:8083/mqtt';
             } else {
                 // Para acceso desde red (clientes), siempre usar la IP del servidor
-                return 'ws://192.168.0.100:8083/mqtt';
+                return window.EnvConfig ? window.EnvConfig.getMqttWsUrl() : 'ws://192.168.0.100:8083/mqtt';
             }
         })(),
         username: 'jose',

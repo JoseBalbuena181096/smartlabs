@@ -2,6 +2,9 @@
 return [
     'app_name' => 'SMARTLABS',
     'app_url' => 'http://localhost',
+    'server_host' => $_ENV['SERVER_HOST'] ?? $_ENV['MQTT_HOST'] ?? '192.168.0.100',
+    'api_host' => $_ENV['API_HOST'] ?? $_ENV['SERVER_HOST'] ?? '192.168.0.100',
+    'mqtt_host' => $_ENV['MQTT_HOST'] ?? $_ENV['SERVER_HOST'] ?? '192.168.0.100',
     'default_controller' => 'Dashboard',
     'default_action' => 'index',
     'assets_path' => '/assets/',

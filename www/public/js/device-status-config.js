@@ -22,10 +22,10 @@ window.DeviceStatusConfig = {
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
                 return 'ws://localhost:8086';
             }
-            // Si accedemos desde la IP externa (192.168.0.100)
-            else if (hostname === '192.168.0.100') {
+            // Si accedemos desde la IP externa
+            else if (hostname === (window.EnvConfig ? window.EnvConfig.getServerHost() : '192.168.0.100')) {
                 // Verificar si estamos en el servidor (mismo computador)
-                // Si la página se carga desde 192.168.0.100 pero estamos en el servidor,
+                // Si la página se carga desde IP externa pero estamos en el servidor,
                 // usar localhost para evitar problemas de red interna
                 try {
                     // Intentar detectar si somos el servidor verificando la IP local
@@ -33,11 +33,11 @@ window.DeviceStatusConfig = {
                     if (isServer) {
                         return 'ws://localhost:8086';
                     } else {
-                        return 'ws://192.168.0.100:8086';
+                        return window.EnvConfig ? window.EnvConfig.getWebSocketUrl(8086) : 'ws://192.168.0.100:8086';
                     }
                 } catch (e) {
                     // Fallback: usar la IP externa
-                    return 'ws://192.168.0.100:8086';
+                    return window.EnvConfig ? window.EnvConfig.getWebSocketUrl(8086) : 'ws://192.168.0.100:8086';
                 }
             }
             // Fallback: usar el mismo hostname que la página web
@@ -94,7 +94,8 @@ window.DeviceStatusConfig = {
                 return url;
             } else {
                 // Para acceso desde red (clientes), siempre usar la IP del servidor
-                const url = `${protocol}//192.168.0.100:8083/mqtt`;
+                const serverHost = window.EnvConfig ? window.EnvConfig.getServerHost() : '192.168.0.100';
+                const url = `${protocol}//${serverHost}:8083/mqtt`;
                 console.log('📡 Configuración MQTT: Acceso desde red local/servidor detectado');
                 return url;
             }

@@ -1,5 +1,6 @@
 <?php 
 $title = "USUARIO PRESTAMOS - SMARTLABS";
+$config = include __DIR__ . '/../../config/app.php';
 include __DIR__ . '/../layout/header.php'; 
 ?>
 
@@ -28,6 +29,11 @@ include __DIR__ . '/../layout/header.php';
       <!-- Estado Watchdog -->
       <div class="ml-3">
         <span id="watchdog_status"><span class="badge badge-info">Watchdog Iniciando...</span></span>
+      </div>
+      
+      <!-- Estado Audio -->
+      <div class="ml-3">
+        <span id="audio_status"></span>
       </div>
 
       <!-- navbar collapse -->
@@ -250,9 +256,70 @@ function generarCadenaAleatoria(longitud) {
 
 const cadenaAleatoria = generarCadenaAleatoria(6);
 
+// Sistema de audio mejorado que cumple con políticas de autoplay
 var audio = new Audio('/public/audio/audio.mp3');
+var audioEnabled = false;
+var audioInitialized = false;
+
 // Variable para almacenar el RFID actual
 var currentRfid = '';
+
+// Función para inicializar el audio después de interacción del usuario
+function initializeAudio() {
+    if (!audioInitialized) {
+        audio.load();
+        audio.play().then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audioEnabled = true;
+            audioInitialized = true;
+            console.log('✅ Audio habilitado después de interacción del usuario');
+            
+            // Mostrar notificación de audio habilitado
+            showAudioNotification('🔊 Audio habilitado', 'success');
+        }).catch((error) => {
+            console.log('❌ No se pudo habilitar el audio:', error);
+            audioEnabled = false;
+            showAudioNotification('🔇 Audio deshabilitado por el navegador', 'warning');
+        });
+    }
+}
+
+// Función para reproducir audio de forma segura
+function playNotificationSound() {
+    if (audioEnabled && audioInitialized) {
+        audio.currentTime = 0;
+        audio.play().catch(function(error) {
+            console.log('❌ Error al reproducir audio:', error);
+            showAudioNotification('🔇 Error reproduciendo audio', 'warning');
+        });
+    } else {
+        console.log('🔇 Audio no disponible - se requiere interacción del usuario');
+        showAudioNotification('🔇 Haz clic para habilitar audio', 'info');
+    }
+}
+
+// Función para mostrar notificaciones de audio
+function showAudioNotification(message, type) {
+    const colors = {
+        success: 'text-success',
+        warning: 'text-warning', 
+        info: 'text-info',
+        error: 'text-danger'
+    };
+    
+    const audioStatus = document.getElementById('audio_status');
+    if (audioStatus) {
+        audioStatus.innerHTML = `<small class="${colors[type]}">${message}</small>`;
+        
+        // Auto-ocultar después de 3 segundos para mensajes informativos
+        if (type === 'info' || type === 'success') {
+            setTimeout(() => {
+                audioStatus.innerHTML = '';
+            }, 3000);
+        }
+    }
+}
 
 /*
 ******************************
@@ -270,9 +337,7 @@ function process_msg(topic, message){
     var sanitizedRfid = sanitizeRfid(msg);
     
     // Reproducir audio de notificación
-    audio.play().catch(function(error) {
-      console.log("Error al reproducir audio:", error);
-    });
+    playNotificationSound();
     
     // Mostrar en display de nuevo acceso
     document.getElementById('display_new_access').innerHTML = 'Procesando RFID: ' + sanitizedRfid;
@@ -284,9 +349,7 @@ function process_msg(topic, message){
     // Usar el RFID almacenado para refrescar la tabla de préstamos
     if(currentRfid) {
       // Reproducir audio de notificación
-      audio.play().catch(function(error) {
-        console.log("Error al reproducir audio:", error);
-      });
+      playNotificationSound();
       
       // Refrescar los datos de préstamos usando el RFID almacenado
       $.ajax({
@@ -423,8 +486,14 @@ function validateRfidWithApi(rfid, retryCount = 0) {
     const retryDelay = 2000; // 2 segundos
     
     return new Promise(function(resolve, reject) {
+        // Construir URL de forma más robusta
+        var apiHost = '<?php echo !empty($config["api_host"]) ? $config["api_host"] : "192.168.0.100"; ?>';
+        var apiUrl = 'http://' + apiHost + ':3000/api/users/rfid/' + encodeURIComponent(rfid);
+        
+        console.log('🔍 API URL construida:', apiUrl);
+        
         $.ajax({
-            url: 'http://192.168.0.100:3000/api/users/rfid/' + encodeURIComponent(rfid),
+            url: apiUrl,
             method: 'GET',
             timeout: 10000, // Aumentado a 10 segundos
             cache: false,
@@ -489,8 +558,14 @@ function checkSessionState(retryCount = 0) {
     const retryDelay = 2000;
     
     return new Promise(function(resolve, reject) {
+        // Construir URL de forma más robusta
+        var apiHost = '<?php echo !empty($config["api_host"]) ? $config["api_host"] : "192.168.0.100"; ?>';
+        var apiUrl = 'http://' + apiHost + ':3000/api/prestamo/estado/';
+        
+        console.log('🔍 Session API URL construida:', apiUrl);
+        
         $.ajax({
-            url: 'http://192.168.0.100:3000/api/prestamo/estado/',
+            url: apiUrl,
             method: 'GET',
             timeout: 10000, // Aumentado a 10 segundos
             cache: false,
@@ -605,6 +680,31 @@ function consultarPrestamosUsuario(rfid, retryCount = 0) {
 ******************************
 */
 $(document).ready(function() {
+    // Inicializar audio con interacción del usuario
+    function setupAudioInitialization() {
+        // Eventos para inicializar audio en primera interacción
+        const events = ['click', 'touchstart', 'keydown'];
+        
+        function handleFirstInteraction() {
+            initializeAudio();
+            // Remover listeners después de la primera interacción
+            events.forEach(event => {
+                document.removeEventListener(event, handleFirstInteraction);
+            });
+        }
+        
+        // Agregar listeners para primera interacción
+        events.forEach(event => {
+            document.addEventListener(event, handleFirstInteraction, { once: true });
+        });
+        
+        // Mostrar mensaje inicial
+        showAudioNotification('🔇 Haz clic en cualquier lugar para habilitar audio', 'info');
+    }
+    
+    // Configurar inicialización de audio
+    setupAudioInitialization();
+    
     // Auto-focus en el campo de entrada
     $('#registration').focus();
     

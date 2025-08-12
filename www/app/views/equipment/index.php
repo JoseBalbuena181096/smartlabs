@@ -658,9 +658,9 @@ function connectMQTTToSelectedDevice() {
              // Acceso desde localhost - usar WSS seguro
              WebSocket_URL = 'wss://localhost:8074/mqtt';
              console.log('📡 Configuración MQTT: Acceso local detectado (WSS)');
-         } else if (hostname === '192.168.0.100') {
-             // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
-             WebSocket_URL = 'ws://192.168.0.100:8083/mqtt';
+         } else if (hostname === '<?php echo $config["server_host"]; ?>') {
+            // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
+            WebSocket_URL = 'ws://<?php echo $config["mqtt_host"]; ?>:8083/mqtt';
              console.log('📡 Configuración MQTT: Acceso desde red externa detectado (WS)');
          } else {
              // Fallback - usar WS no seguro

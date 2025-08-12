@@ -430,7 +430,7 @@ window.SMARTLABS.dashboard = {
 <?php
 $server_ip = $_SERVER['SERVER_ADDR'] ?? $_SERVER['LOCAL_ADDR'] ?? 'unknown';
 $client_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-$is_local_server = ($server_ip === '192.168.0.100' && ($client_ip === '192.168.0.100' || $client_ip === '127.0.0.1' || $client_ip === 'localhost'));
+$is_local_server = ($server_ip === $config['server_host'] && ($client_ip === $config['server_host'] || $client_ip === '127.0.0.1' || $client_ip === 'localhost'));
 echo "window.SMARTLABS_IS_SERVER = " . ($is_local_server ? 'true' : 'false') . ";\n";
 echo "window.SMARTLABS_SERVER_IP = '" . $server_ip . "';\n";
 echo "window.SMARTLABS_CLIENT_IP = '" . $client_ip . "';\n";
@@ -878,7 +878,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('📡 Configuración MQTT: Acceso local detectado');
       } else {
         // Para acceso desde red (clientes), siempre usar la IP del servidor
-        mqttUrl = 'ws://192.168.0.100:8083/mqtt';
+        mqttUrl = 'ws://<?php echo $config["mqtt_host"]; ?>:8083/mqtt';
         console.log('📡 Configuración MQTT: Acceso desde red local/servidor detectado');
       }
       
