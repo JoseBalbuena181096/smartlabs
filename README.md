@@ -7,26 +7,31 @@ SmartLabs es un **sistema integral de gestión de laboratorios inteligentes** qu
 ### 🎯 ¿Qué Problemas Soluciona SmartLabs?
 
 #### 🔧 **Control de Dispositivos IoT**
+
 - **Problema**: Gestión manual y descentralizada de equipos de laboratorio
 - **Solución**: Control remoto unificado desde aplicaciones móviles y web
 - **Beneficio**: Monitoreo 24/7, automatización de procesos, reducción de errores humanos
 
 #### 📊 **Monitoreo en Tiempo Real**
+
 - **Problema**: Falta de visibilidad del estado actual de dispositivos y equipos
 - **Solución**: Dashboard en tiempo real con WebSocket para actualizaciones instantáneas
 - **Beneficio**: Detección temprana de fallos, optimización de recursos, toma de decisiones informada
 
 #### 👥 **Gestión de Usuarios y Accesos**
+
 - **Problema**: Control manual de accesos y permisos en laboratorios
 - **Solución**: Sistema de autenticación con roles y permisos granulares
 - **Beneficio**: Seguridad mejorada, trazabilidad de acciones, cumplimiento normativo
 
 #### 📦 **Administración de Préstamos**
+
 - **Problema**: Gestión manual de préstamos de equipos con pérdida de inventario
 - **Solución**: Sistema automatizado de préstamos con seguimiento completo
 - **Beneficio**: Reducción de pérdidas, optimización de inventario, historial completo
 
 #### 🔗 **Integración de Sistemas**
+
 - **Problema**: Sistemas aislados sin comunicación entre sí
 - **Solución**: Arquitectura de microservicios con APIs REST y comunicación MQTT
 - **Beneficio**: Escalabilidad, mantenibilidad, integración con sistemas externos
@@ -35,94 +40,28 @@ SmartLabs es un **sistema integral de gestión de laboratorios inteligentes** qu
 
 ### 📐 Diagrama de Arquitectura General
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              SMARTLABS ECOSYSTEM                                │
-└─────────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Flutter App   │    │   Web Browser   │    │  IoT Devices    │
-│   (Mobile/Web)  │    │   (Dashboard)   │    │  (Sensors/Act.) │
-└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
-          │                      │                      │
-          │ HTTP/REST            │ HTTP                 │ MQTT
-          │                      │                      │
-          ▼                      ▼                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        NGINX REVERSE PROXY                      │
-│                     (Load Balancer & SSL)                      │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          │               │               │
-          ▼               ▼               ▼
-┌─────────────────┐ ┌─────────────┐ ┌─────────────────┐
-│  Flutter API    │ │  Web App    │ │ Device Monitor  │
-│   (Node.js)     │ │   (PHP)     │ │   (Node.js)     │
-│   Port: 3000    │ │  Port: 80   │ │   Port: 8080    │
-│                 │ │             │ │                 │
-│ • REST API      │ │ • MVC       │ │ • WebSocket     │
-│ • MQTT Client   │ │ • Sessions  │ │ • Real-time     │
-│ • Validation    │ │ • Auth      │ │ • Monitoring    │
-│ • Rate Limit    │ │ • CRUD      │ │ • Notifications │
-└─────────┬───────┘ └──────┬──────┘ └─────────┬───────┘
-          │                │                  │
-          └────────────────┼──────────────────┘
-                           │
-                           ▼
-          ┌─────────────────────────────────────┐
-          │           MariaDB Database          │
-          │            Port: 3306              │
-          │                                    │
-          │ Tables:                            │
-          │ • habintants (users)               │
-          │ • traffic (devices)                │
-          │ • user_devices (assignments)       │
-          │ • equipment (inventory)            │
-          │ • loans (borrowing system)         │
-          │ • device_logs (audit trail)       │
-          └─────────────────────────────────────┘
-                           │
-                           ▼
-          ┌─────────────────────────────────────┐
-          │            EMQX Broker             │
-          │         MQTT Port: 1883            │
-          │       Dashboard: 18083             │
-          │                                    │
-          │ Topics:                            │
-          │ • smartlabs/devices/+/status       │
-          │ • smartlabs/devices/+/control      │
-          │ • smartlabs/devices/+/data         │
-          │ • smartlabs/alerts/+               │
-          └─────────────────────────────────────┘
-```
+![alt text](image.png)
 
 ### 🔄 Flujo de Datos e Interacciones
 
 #### 1. **Control de Dispositivos desde Flutter App**
-```
-Flutter App → Flutter API → Database → MQTT Broker → IoT Device
-     ↑                                                    ↓
-     └─────────── WebSocket Monitor ←─── Status Update ───┘
-```
+
+![alt text](image-1.png)
 
 #### 2. **Monitoreo en Tiempo Real**
-```
-IoT Device → MQTT Broker → Device Monitor → WebSocket → Web Dashboard
-                    ↓
-              Database Update
-```
+
+![alt text](image-2.png)
 
 #### 3. **Gestión Web de Usuarios y Préstamos**
+
 ```
-Web Browser → PHP Web App → Database → Audit Logs
-                   ↓
-            Session Management
+![alt text](image-3.png)
 ```
 
 ### 🧩 Componentes Detallados
 
 #### **Flutter API (Node.js) - Puerto 3000**
+
 ```javascript
 // Arquitectura de la API
 api/
@@ -143,6 +82,7 @@ api/
 ```
 
 **Responsabilidades:**
+
 - 🔌 **API REST** para aplicaciones Flutter
 - 🔐 **Autenticación** y autorización
 - 📡 **Cliente MQTT** para comunicación IoT
@@ -151,6 +91,7 @@ api/
 - 📊 **Logging** y monitoreo
 
 #### **Device Monitor (Node.js) - Puerto 8080**
+
 ```javascript
 // Arquitectura del Monitor
 monitor/
@@ -165,6 +106,7 @@ monitor/
 ```
 
 **Responsabilidades:**
+
 - 🔄 **WebSocket Server** para tiempo real
 - 👀 **Monitoreo continuo** de dispositivos
 - 📢 **Notificaciones** instantáneas
@@ -172,6 +114,7 @@ monitor/
 - 📈 **Métricas** de rendimiento
 
 #### **Web Application (PHP MVC) - Puerto 80**
+
 ```php
 // Arquitectura MVC
 app/
@@ -195,6 +138,7 @@ app/
 ```
 
 **Responsabilidades:**
+
 - 🖥️ **Dashboard administrativo** web
 - 👤 **Gestión de usuarios** y roles
 - 📦 **Sistema de préstamos** completo
@@ -205,16 +149,19 @@ app/
 ### 🔄 Patrones de Comunicación
 
 #### **Comunicación Síncrona (HTTP/REST)**
+
 - Flutter App ↔ Flutter API
 - Web Browser ↔ PHP Web App
 - Health checks entre servicios
 
 #### **Comunicación Asíncrona (MQTT)**
+
 - Flutter API ↔ IoT Devices
 - Device Monitor ↔ IoT Devices
 - Notificaciones y alertas
 
 #### **Comunicación en Tiempo Real (WebSocket)**
+
 - Device Monitor ↔ Web Dashboard
 - Device Monitor ↔ Flutter App
 - Actualizaciones instantáneas de estado
@@ -222,6 +169,7 @@ app/
 ### 🛡️ Seguridad y Escalabilidad
 
 #### **Medidas de Seguridad**
+
 - 🔐 **Autenticación JWT** en API
 - 🛡️ **Rate limiting** por IP
 - 🔒 **HTTPS/SSL** en producción
@@ -229,6 +177,7 @@ app/
 - 📝 **Audit logs** completos
 
 #### **Escalabilidad**
+
 - 🐳 **Containerización** con Docker
 - ⚖️ **Load balancing** con Nginx
 - 📊 **Monitoreo** de métricas
@@ -279,6 +228,7 @@ smartlabs/
 ## 🎯 Casos de Uso Específicos
 
 ### 📱 **Escenario 1: Control Remoto desde App Móvil**
+
 ```
 👤 Usuario → 📱 Flutter App → 🔌 API REST → 💾 Database → 📡 MQTT → 🔧 Dispositivo IoT
                                                               ↓
@@ -286,6 +236,7 @@ smartlabs/
 ```
 
 **Flujo Detallado:**
+
 1. Usuario abre app Flutter y ve lista de dispositivos asignados
 2. Selecciona dispositivo y presiona "Encender"
 3. App envía POST a `/api/devices/control` con credenciales
@@ -298,6 +249,7 @@ smartlabs/
 10. Dashboard actualiza estado en tiempo real
 
 ### 🖥️ **Escenario 2: Gestión de Préstamos Web**
+
 ```
 👨‍💼 Admin → 🌐 Web Browser → 🖥️ PHP App → 💾 Database → 📧 Notifications
                                               ↓
@@ -305,6 +257,7 @@ smartlabs/
 ```
 
 **Flujo Detallado:**
+
 1. Administrador accede al panel web de préstamos
 2. Busca usuario por matrícula o nombre
 3. Selecciona equipo disponible del inventario
@@ -315,6 +268,7 @@ smartlabs/
 8. Sistema actualiza inventario y genera reporte
 
 ### 📊 **Escenario 3: Monitoreo en Tiempo Real**
+
 ```
 🔧 Sensores IoT → 📡 MQTT → 👀 Monitor → 🔄 WebSocket → 📊 Dashboard
                            ↓
@@ -322,6 +276,7 @@ smartlabs/
 ```
 
 **Flujo Detallado:**
+
 1. Sensores envían datos cada 30 segundos vía MQTT
 2. Monitor Service procesa y almacena en base de datos
 3. Dashboard web muestra gráficos en tiempo real
@@ -332,18 +287,21 @@ smartlabs/
 ## 📈 Beneficios Cuantificables
 
 ### 🎯 **Eficiencia Operacional**
+
 - ⏱️ **Reducción del 70%** en tiempo de gestión manual
 - 🔍 **99.9% de visibilidad** del estado de dispositivos
 - 📉 **Reducción del 50%** en pérdida de equipos
 - ⚡ **Respuesta en <2 segundos** para control de dispositivos
 
 ### 💰 **Ahorro de Costos**
+
 - 💵 **Reducción del 40%** en costos operativos
 - 🔧 **Mantenimiento predictivo** reduce fallos en 60%
 - 📦 **Optimización de inventario** ahorra 30% en compras
 - 👥 **Automatización** reduce necesidad de personal en 25%
 
 ### 🛡️ **Seguridad y Cumplimiento**
+
 - 📝 **100% de trazabilidad** de acciones
 - 🔐 **Acceso controlado** con autenticación robusta
 - 📊 **Reportes automáticos** para auditorías
@@ -352,6 +310,7 @@ smartlabs/
 ## 🔧 Tecnologías y Herramientas
 
 ### **Backend Technologies**
+
 - **Node.js 18+**: Runtime para APIs y servicios
 - **Express.js**: Framework web para APIs REST
 - **Socket.io**: WebSocket para tiempo real
@@ -363,6 +322,7 @@ smartlabs/
 - **Winston**: Logging estructurado
 
 ### **Frontend Technologies**
+
 - **PHP 8.2+**: Lenguaje del servidor web
 - **Bootstrap 5**: Framework CSS responsive
 - **jQuery 3.6**: Manipulación DOM
@@ -371,6 +331,7 @@ smartlabs/
 - **DataTables**: Tablas avanzadas
 
 ### **Infrastructure & DevOps**
+
 - **Docker & Docker Compose**: Containerización
 - **Nginx**: Reverse proxy y load balancer
 - **MariaDB 10.6**: Base de datos relacional
@@ -379,6 +340,7 @@ smartlabs/
 - **Let's Encrypt**: Certificados SSL gratuitos
 
 ### **Development & Testing**
+
 - **Jest**: Testing para Node.js
 - **PHPUnit**: Testing para PHP
 - **Postman**: Testing de APIs
@@ -392,11 +354,13 @@ smartlabs/
 ### Desarrollo Local (Laragon)
 
 1. **Servicios esenciales con Docker**:
+
 ```bash
 docker-compose -f docker-dev.yml up -d
 ```
 
 2. **API Flutter**:
+
 ```bash
 cd flutter-api
 npm install
@@ -404,6 +368,7 @@ npm run dev  # Puerto 3000
 ```
 
 3. **Monitor de dispositivos**:
+
 ```bash
 cd node
 npm install
@@ -426,6 +391,7 @@ docker-compose up -d --build
 ## 🔗 Endpoints Principales
 
 ### API Flutter (Puerto 3000)
+
 - `GET /health` - Health check
 - `GET /api` - Documentación de endpoints
 - `POST /api/devices/control` - Controlar dispositivos
@@ -433,10 +399,12 @@ docker-compose up -d --build
 - `POST /api/prestamo/control/` - Gestión de préstamos
 
 ### Monitor WebSocket (Puerto 8080)
+
 - `ws://localhost:8080` - Conexión WebSocket
 - `GET /health` - Health check
 
 ### Aplicación Web (Puerto 80)
+
 - `/` - Dashboard principal
 - `/Auth/login` - Inicio de sesión
 - `/Device` - Gestión de dispositivos
@@ -445,20 +413,21 @@ docker-compose up -d --build
 
 ## 🔧 Servicios Docker
 
-| Servicio | Puerto | Descripción |
-|----------|--------|-------------|
-| Web App | 80 | Aplicación PHP |
-| Flutter API | 3000 | API REST Node.js |
-| Device Monitor | 8080 | WebSocket Server |
-| MariaDB | 3306 | Base de datos |
-| EMQX Dashboard | 18083 | Panel MQTT |
-| EMQX MQTT | 1883 | Broker MQTT |
-| PHPMyAdmin | 8080 | Admin BD |
-| Nginx | 8000/8443 | Reverse Proxy |
+| Servicio       | Puerto    | Descripción      |
+| -------------- | --------- | ---------------- |
+| Web App        | 80        | Aplicación PHP   |
+| Flutter API    | 3000      | API REST Node.js |
+| Device Monitor | 8080      | WebSocket Server |
+| MariaDB        | 3306      | Base de datos    |
+| EMQX Dashboard | 18083     | Panel MQTT       |
+| EMQX MQTT      | 1883      | Broker MQTT      |
+| PHPMyAdmin     | 8080      | Admin BD         |
+| Nginx          | 8000/8443 | Reverse Proxy    |
 
 ## 📊 Monitoreo
 
 ### Health Checks
+
 ```bash
 curl http://localhost:3000/health      # API Flutter
 curl http://localhost:8080/health      # Monitor
@@ -466,6 +435,7 @@ curl http://localhost/                 # Web App
 ```
 
 ### Logs
+
 ```bash
 docker-compose logs -f smartlabs-flutter-api
 docker-compose logs -f smartlabs-device-monitor
@@ -475,6 +445,7 @@ docker-compose logs -f smartlabs-web-app
 ## 🔐 Configuración
 
 ### Variables de Entorno (.env)
+
 ```bash
 # Base de datos
 MARIADB_ROOT_PASSWORD=rootpassword
@@ -496,6 +467,7 @@ DEVICE_MONITOR_PORT=8080
 ## 📱 Integración Flutter
 
 ### Ejemplo de uso de la API
+
 ```dart
 // Controlar dispositivo
 final response = await http.post(
@@ -510,6 +482,7 @@ final response = await http.post(
 ```
 
 ### WebSocket para tiempo real
+
 ```dart
 final channel = WebSocketChannel.connect(
   Uri.parse('ws://localhost:8080'),
@@ -525,6 +498,7 @@ channel.sink.add(jsonEncode({
 ## 🛠️ Desarrollo
 
 ### Estructura de la API (Node.js)
+
 - **Controllers**: Lógica de endpoints
 - **Services**: Lógica de negocio
 - **Routes**: Definición de rutas
@@ -532,6 +506,7 @@ channel.sink.add(jsonEncode({
 - **Config**: Configuración de BD y MQTT
 
 ### Estructura Web (PHP MVC)
+
 - **Controllers**: Controladores de páginas
 - **Models**: Modelos de datos
 - **Views**: Plantillas PHP
@@ -560,14 +535,29 @@ Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) par
 
 ---
 
-**Versión**: 2.0  
+**Versión**: 2.0
+
 ## 👨‍💻 Creador
 
 **José Ángel Balbuena Palma**  
-*Ingeniero Mecatrónico*  
-*Especialista del Laboratorio de Mecatrónica*  
-*Departamento de Mecatrónica*  
-*Tecnológico de Monterrey - Campus Puebla*
+_Ingeniero Mecatrónico_  
+_Especialista del Laboratorio de Mecatrónica_  
+_Departamento de Mecatrónica_  
+_Tecnológico de Monterrey - Campus Puebla_
+
+🔗 **GitHub**: [JoseBalbuena181096](https://github.com/JoseBalbuena181096)
+
+## 📱 Aplicaciones Móviles
+
+**Repositorio de Apps Flutter y Swift**: [app_smartlabs](https://github.com/JoseBalbuena181096/app_smartlabs)
+
+El sistema SmartLabs incluye aplicaciones nativas para Android (Flutter) e iOS (Swift) que permiten el control remoto de dispositivos mediante códigos QR y gestión de préstamos de herramientas.
+
+## 🎥 Video Demostrativo
+
+**SmartLabs: Revolución IoT en Laboratorios**: [Ver en YouTube](https://www.youtube.com/watch?v=mITI8vPQD_g)
+
+Video demostrativo del sistema SmartLabs implementado en el Laboratorio de Mecatrónica del Tecnológico de Monterrey Campus Puebla, mostrando las capacidades IoT y la integración completa del ecosistema.
 
 ---
 
