@@ -1,56 +1,41 @@
 <?php
 /**
- * Configuración de sesión permanente
- * Este archivo configura PHP para mantener sesiones activas indefinidamente
+ * Configuración de sesión SMARTLABS
+ *
+ * Hasta ahora la sesión era "permanente" (gc_probability=0, lifetime=2147483647)
+ * lo que combinado con SHA1 sin sal hacía que una credencial robada valiera
+ * para siempre. Ajustamos a algo razonable (12 h por default), reactivamos el
+ * garbage collector y dejamos cookie de sesión solo hasta cerrar el navegador.
+ *
+ * Las constantes pueden sobrescribirse desde .env con SESSION_LIFETIME (en
+ * segundos). Si la app corre detrás de HTTPS, fija SESSION_COOKIE_SECURE=1.
  */
 
-// Deshabilitar garbage collection automático de sesiones
-ini_set('session.gc_probability', 0);
-ini_set('session.gc_divisor', 1000);
+$lifetime = (int)($_ENV['SESSION_LIFETIME'] ?? 43200); // 12 h por default
+$secureCookie = (int)($_ENV['SESSION_COOKIE_SECURE'] ?? 0);
 
-// Establecer tiempo de vida máximo de sesión (valor muy alto)
-ini_set('session.gc_maxlifetime', 2147483647); // Máximo valor de 32-bit
+ini_set('session.gc_maxlifetime', (string)$lifetime);
+ini_set('session.gc_probability', '1');
+ini_set('session.gc_divisor',     '100');
 
-// Configurar cookies de sesión para que no expiren
-ini_set('session.cookie_lifetime', 0); // 0 = hasta que se cierre el navegador
+ini_set('session.cookie_lifetime', '0'); // hasta cerrar el navegador
+ini_set('session.cache_expire',    (string)max(180, (int)($lifetime / 60))); // minutos
+ini_set('session.cache_limiter',   'nocache');
 
-// Configurar el tiempo de vida de la cache de sesión
-ini_set('session.cache_expire', 0); // Sin límite
-
-// Configurar el limitador de cache
-ini_set('session.cache_limiter', 'nocache');
-
-// Configurar el nombre de la sesión
-ini_set('session.name', 'SMARTLABS_PERMANENT_SESSION');
-
-// Configurar el directorio de almacenamiento de sesiones
-// ini_set('session.save_path', '/tmp/smartlabs_sessions');
-
-// Configurar el manejador de sesión
-ini_set('session.save_handler', 'files');
-
-// Configurar la serialización de sesión
-ini_set('session.serialize_handler', 'php');
-
-// Configurar el uso de cookies estrictas
-ini_set('session.use_strict_mode', 1);
-
-// Configurar el uso de cookies solamente
-ini_set('session.use_cookies', 1);
-ini_set('session.use_only_cookies', 1);
-
-// Configurar la seguridad de cookies
-ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 0); // Cambiar a 1 en HTTPS
-ini_set('session.cookie_samesite', 'Lax');
-
-// Log de configuración
-error_log('SMARTLABS: Configuración de sesión permanente cargada');
+ini_set('session.name',                'SMARTLABS_SESSION');
+ini_set('session.save_handler',        'files');
+ini_set('session.serialize_handler',   'php');
+ini_set('session.use_strict_mode',     '1');
+ini_set('session.use_cookies',         '1');
+ini_set('session.use_only_cookies',    '1');
+ini_set('session.cookie_httponly',     '1');
+ini_set('session.cookie_secure',       (string)$secureCookie);
+ini_set('session.cookie_samesite',     'Lax');
 
 return [
-    'permanent' => true,
-    'gc_disabled' => true,
-    'max_lifetime' => 2147483647,
-    'cookie_lifetime' => 0,
-    'session_name' => 'SMARTLABS_PERMANENT_SESSION'
+    'permanent'        => false,
+    'max_lifetime'     => $lifetime,
+    'cookie_lifetime'  => 0,
+    'cookie_secure'    => (bool)$secureCookie,
+    'session_name'     => 'SMARTLABS_SESSION',
 ];

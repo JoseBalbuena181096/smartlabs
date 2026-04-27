@@ -1,14 +1,9 @@
 <?php include __DIR__ . '/../layout/header.php'; ?>
 
 <div class="center-block w-xxl w-auto-xs p-y-md">
-  <div class="navbar">
-    <div class="pull-center">
-    </div>
-  </div>
   <div class="p-a-md box-color r box-shadow-z1 text-color m-a">
-    <img src="/assets/images/smartlabs.png" style="height: 180px;" alt="SMARTLABS">
     <div class="m-b text-sm text-primary _600" style="font-size: 16px">
-      Iniciar sesión con tu cuenta SMARTLABS
+      Registrar nuevo usuario administrativo SMARTLABS
     </div>
     <form method="post" name="form">
       <input type="hidden" name="_csrf" value="<?= Controller::e($csrf ?? '') ?>">
@@ -17,10 +12,14 @@
         <label>Email</label>
       </div>
       <div class="md-form-group float-label">
-        <input name="password" type="password" class="md-input" required>
-        <label>Contraseña</label>
+        <input name="password" type="password" class="md-input" minlength="8" required>
+        <label>Contraseña (mínimo 8 caracteres)</label>
       </div>
-      <button type="submit" class="btn primary btn-block p-x-md">Iniciar Sesión</button>
+      <div class="md-form-group float-label">
+        <input name="confirm_password" type="password" class="md-input" minlength="8" required>
+        <label>Confirmar contraseña</label>
+      </div>
+      <button type="submit" class="btn primary btn-block p-x-md">Crear usuario</button>
     </form>
 
     <?php if (!empty($msg)): ?>
@@ -31,8 +30,8 @@
   </div>
 
   <div class="p-v-lg text-center">
-    <div>¿No tienes una cuenta? <a href="/Auth/register" class="text-primary _600">Registrarse</a></div>
+    <div><a href="/Dashboard" class="text-primary _600">← Volver al dashboard</a></div>
   </div>
 </div>
 
-<?php include __DIR__ . '/../layout/footer.php'; ?> 
+<?php include __DIR__ . '/../layout/footer.php'; ?>
