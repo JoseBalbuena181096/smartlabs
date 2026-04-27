@@ -32,14 +32,16 @@ Solo hay un sketch que aplica a cualquier estación:
 |---|---|---|---|
 | `esp32_acceso_becarios.cpp`            | `SMART10000` | 192.168.0.185 | Acceso de becarios al espacio |
 | `esp32_acceso_maquinas.cpp`            | `SMART10001` | 192.168.0.123 | Encendido de máquinas / mesas |
-| `esp32_prestamo_lector_HERRAMIENTA.cpp`| `SMART10002` | 192.168.0.33  | **Préstamo: lee la pegatina NTAG de la herramienta** |
-| `esp32_prestamo_lector_USUARIO.cpp`    | `SMART10003` | 192.168.0.34  | **Préstamo: lee la credencial del usuario** |
-| `_DEPRECATED_esp32_prestamo_usuario_v1.cpp` | (mismo SMART10003) | — | Versión vieja del lector de usuario. Solo conservada como referencia; **no flashear**. |
+| `esp32_prestamo_lector_UNIFICADO.cpp`  | `SMART10003` | 192.168.0.34  | **Préstamo unificado**: una sola caja lee tanto credenciales como pegatinas NTAG de herramienta. Ver §6 abajo. |
+| `_DEPRECATED_esp32_prestamo_USUARIO_split.cpp` | (mismo SMART10003) | — | Variante vieja, solo lectura de credencial. Reemplazado por UNIFICADO. |
+| `_DEPRECATED_esp32_prestamo_HERRAMIENTA_split.cpp` | (mismo SMART10002) | — | Variante vieja, solo lectura de equipment. Reemplazado por UNIFICADO. |
+| `_DEPRECATED_esp32_prestamo_usuario_v1.cpp` | (mismo SMART10003) | — | Versión aún más vieja (sin timeout). |
 
-> **El autopréstamo de herramientas usa dos placas ESP32 conviviendo**:
-> primero el usuario pasa su credencial en `SMART10003` (lector USUARIO) y el
-> backend abre sesión; después el usuario pasa la pegatina NTAG de la herramienta
-> en `SMART10002` (lector HERRAMIENTA) y el backend asocia el préstamo.
+> **Préstamo en una sola caja** (post-refactor 2026-04-27): la lógica de
+> USUARIO + HERRAMIENTA se consolidó en `esp32_prestamo_lector_UNIFICADO.cpp`.
+> El SN `SMART10002` queda libre para futuras estaciones. Si tienes el
+> hardware de las dos cajas anteriores, solo necesitas mantener una con el
+> firmware unificado y descartar la otra.
 
 ## 2. Contrato MQTT (lo que el backend espera)
 
@@ -62,10 +64,10 @@ Y publica de vuelta a:
 
 | Estación | Topic publish del ESP32 | Comandos válidos del backend |
 |---|---|---|
-| `esp32_acceso_becarios.cpp`             | `{SN}/scholar_query` | `granted1` `granted0` `refused` |
-| `esp32_acceso_maquinas.cpp`             | `{SN}/access_query`  | `granted1` `granted0` `refused` |
-| `esp32_prestamo_lector_USUARIO.cpp`     | `{SN}/loan_queryu`   | `found` `nofound` `unload` |
-| `esp32_prestamo_lector_HERRAMIENTA.cpp` | `{SN}/loan_querye`   | `prestado` `devuelto` `nofound` `nologin` |
+| `esp32_acceso_becarios.cpp`               | `{SN}/scholar_query` | `granted1` `granted0` `refused` |
+| `esp32_acceso_maquinas.cpp`               | `{SN}/access_query`  | `granted1` `granted0` `refused` |
+| `esp32_prestamo_lector_UNIFICADO.cpp` (sin sesión) | `{SN}/loan_queryu` | `found` `nofound` |
+| `esp32_prestamo_lector_UNIFICADO.cpp` (con sesión) | `{SN}/loan_querye` | `prestado` `devuelto` `nofound` `unload` `refused` `nologin` |
 
 **Reglas que el firmware debe respetar siempre**:
 
@@ -139,7 +141,52 @@ MQTT (mismos topics, mismos comandos, mismo formato de payload). Cambios:
 | `temprature_sens_read()` y publish de `{SN}/temp` eliminados (deprecated, backend no los consume) | ✅ aplicado |
 | OLED `TARGETA` → `TARJETA`, mensajes adaptados al ancho de 128 px | ✅ aplicado |
 
-## 6. Pendientes (siguiente bloque de trabajo)
+## 6. Préstamo unificado (`esp32_prestamo_lector_UNIFICADO.cpp`)
+
+Una sola estación física hace todo el flujo:
+
+```
+                Pasa tag físico
+                     │
+                     ▼
+            ┌─────────────────┐
+            │ ¿hay sesión?    │
+            └────┬─────────┬──┘
+                NO         SÍ
+                │           │
+                ▼           ▼
+   publish a loan_queryu    publish a loan_querye
+   (UID = el tag leído)     (UID = el tag leído)
+                │           │
+                │           ├─ backend resuelve:
+                │           │   • UID == credencial actual → close + 'unload'
+                │           │   • UID es OTRA credencial    → 'refused'
+                │           │   • UID es equipment          → 'prestado'/'devuelto'
+                │           │   • UID no existe             → 'nofound'
+                │           │
+                ▼           ▼
+   backend resuelve:   firmware reacciona y refresca timer.
+   • UID en cards → 'found' + user_name (abre sesión)
+   • si no       → 'nofound'
+```
+
+Características clave:
+
+- **Timer de inactividad**: 180 s (configurable en `INACTIVITY_TIMEOUT_MS`).
+  Cualquier interacción (préstamo, devolución, refused, nofound) lo resetea.
+  Si expira, el firmware republica el UID original a `loan_queryu` y el
+  backend cierra la sesión devolviendo `unload`. Como salvaguarda local, el
+  firmware también pinta el iddle si no recibe respuesta en el siguiente ciclo.
+- **Topic dual sin tocar el contrato MQTT existente**: el firmware decide a
+  cuál de los dos topics ya conocidos publica según su estado, lo que evita
+  cambios en clientes externos que estuvieran observando los topics.
+- **Detección de credencial vs equipment delegada al backend**: el firmware
+  no necesita conocer el tipo del tag; sólo sabe si tiene sesión.
+- **Compatibilidad con la base de datos**: la columna `cards.cards_number`
+  identifica credenciales y `equipments.equipments_rfid` identifica
+  herramientas. El backend prueba en el orden correcto.
+
+## 7. Pendientes (siguiente bloque de trabajo)
 
 | Severidad | Tarea |
 |---|---|

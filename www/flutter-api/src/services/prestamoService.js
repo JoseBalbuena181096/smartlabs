@@ -273,10 +273,21 @@ class PrestamoService {
     }
 
     /**
-     * Consulta de equipo en lector HERRAMIENTA. Requiere sesión activa
-     * (en la única estación instalada hoy buscamos la sesión más reciente).
+     * Consulta de equipo en lector HERRAMIENTA (o lector unificado con
+     * sesión activa). Hoy maneja tres casos sobre el mismo UID entrante:
+     *
+     *   1. Es la credencial del usuario actual → cierra sesión (`unload`).
+     *      Esto permite al firmware unificado cerrar pasando la credencial
+     *      sin tener que decidir el topic.
+     *   2. Es la credencial de OTRO usuario → publica `refused`. Evita que
+     *      alguien aproveche un descuido para apropiarse de la sesión.
+     *   3. Es un tag de equipment → flujo de préstamo/devolución.
+     *
+     * Si no hay sesión activa, responde `nologin`.
+     * Cualquier interacción refresca `expires_at` para que el timeout local
+     * y el del backend queden alineados.
      */
-    async handleLoanEquipmentQuery(deviceSerie, equipRFID) {
+    async handleLoanEquipmentQuery(deviceSerie, uid) {
         try {
             const session = await this._latestActiveSession();
             if (!session) {
@@ -284,7 +295,31 @@ class PrestamoService {
                 return { success: false, message: 'No hay usuario logueado', action: 'no_login' };
             }
 
-            const equipment = await this.getEquipmentByRFID(equipRFID);
+            // Caso 1: cierre con la credencial del usuario actual
+            if (uid === session.cards_number) {
+                await this._closeSession(session.device_serie);
+                await this.enviarComandosMQTT(deviceSerie, null, 'unload');
+                return {
+                    success: true,
+                    message: 'Sesión finalizada con credencial',
+                    action: 'unload',
+                    user: session.hab_name,
+                };
+            }
+
+            // Caso 2: credencial de OTRO usuario (rechazar)
+            const otherUser = await this.getUserByRFID(uid);
+            if (otherUser) {
+                await this.enviarComandosMQTT(deviceSerie, null, 'refused');
+                return {
+                    success: false,
+                    message: 'Credencial de otro usuario en sesión activa',
+                    action: 'refused',
+                };
+            }
+
+            // Caso 3: equipment
+            const equipment = await this.getEquipmentByRFID(uid);
             if (!equipment) {
                 await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
                 return { success: false, message: 'Equipo no encontrado', action: 'equipment_not_found' };
@@ -309,6 +344,9 @@ class PrestamoService {
                 return { success: false, message: 'Error registrando préstamo', action: 'database_error' };
             }
 
+            // Refrescar TTL de la sesión (cualquier préstamo cuenta como actividad).
+            await this._refreshSession(session.device_serie);
+
             const command = newLoanState === 1 ? 'prestado' : 'devuelto';
             await this.enviarComandosMQTT(deviceSerie, null, command);
 
@@ -323,6 +361,23 @@ class PrestamoService {
         } catch (err) {
             console.error('❌ Error handleLoanEquipmentQuery:', err);
             return { success: false, message: 'Error interno', error: err.message };
+        }
+    }
+
+    /**
+     * Refresca expires_at de una sesión activa (extiende otros 150 s).
+     * Usado tras cada préstamo/devolución para que el timeout cuente
+     * inactividad real, no tiempo desde el login.
+     */
+    async _refreshSession(deviceSerie, ttlMs = 150000) {
+        const expiresAt = new Date(Date.now() + ttlMs);
+        try {
+            await dbConfig.execute(
+                'UPDATE loan_sessions SET expires_at = ? WHERE device_serie = ?',
+                [expiresAt, deviceSerie]
+            );
+        } catch (err) {
+            if (err && err.code !== 'ER_NO_SUCH_TABLE') throw err;
         }
     }
 

@@ -69,6 +69,23 @@ Probado end-to-end con `docker compose up`:
    - POST sin token → `403` ✅
    - POST con token y password SHA1 legacy → `302 → /Dashboard` y el hash se rehashea a `$2y$...` (bcrypt 60 chars) en la BD ✅
 
+## 2026-04-27 (post)
+
+### HW-UNIF · firmware unificado de préstamo
+
+| Commit | Cambios |
+|---|---|
+| (siguiente) | **`esp32_prestamo_lector_UNIFICADO.cpp` reemplaza a USUARIO + HERRAMIENTA.** Una sola caja: sin sesión publica el UID a `loan_queryu`, con sesión publica a `loan_querye`. Timer de inactividad de 180 s reseteado en cada interacción; al expirar el firmware republica a `loan_queryu` para que el backend cierre. Comandos nuevos que reconoce: `unload` (cierre con la propia credencial) y `refused` (credencial ajena). Variantes anteriores movidas a `_DEPRECATED_*_split.cpp`. |
+| (siguiente) | **`prestamoService.handleLoanEquipmentQuery` resuelve 3 casos** sobre el UID entrante: 1) `uid === session.cards_number` → `_closeSession` + `unload`. 2) `getUserByRFID(uid)` no nulo → `refused`. 3) cualquier otra cosa → flujo de equipment normal. Cada préstamo refresca `expires_at` con `_refreshSession()` para que el timeout sea de inactividad real, no de tiempo desde el login. |
+| (siguiente) | **README hardware** actualizado con la tabla nueva, contrato MQTT del flujo dual y diagrama del flujo unificado. SN `SMART10002` libre para futuras estaciones. |
+
+### Validación (post)
+
+- Sin sesión + credencial Jose → `found` + `user_name` ✅
+- Con sesión + equipment BROCAS 1 → `prestado` ✅
+- Con sesión + credencial David (ajena) → `refused`, sesión de Jose intacta ✅
+- Con sesión + credencial Jose (la misma que abrió) → `unload`, sesión cerrada ✅
+
 ## Pendientes (siguiente bloque, no incluido aquí)
 
 - **HW**: OTA, NVS portal de configuración WiFi, refactor a un solo firmware con PlatformIO + `build_flags`.

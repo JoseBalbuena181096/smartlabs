@@ -17,7 +17,7 @@ Lista priorizada de mejoras que **no** se aplicaron en los commits del bloque
 | HW-NVS | Media | `secrets.h` requiere recompilar al cambiar SSID/MQTT. Reemplazar por NVS / `Preferences` con un portal de configuración WiFi (WiFiManager) en primer arranque. |
 | HW-PIO | Media | Refactor a un solo firmware con PlatformIO + `build_flags` por modo (4 envs). Hoy hay duplicación de ~80% entre los 4 `esp32_*.cpp`. |
 | HW-BUILTIN | Baja | Confirmar que `BUILTIN_LED` (GPIO2 en ESP32 DevKit) no entra en conflicto con strapping al arrancar. |
-| **HW-UNIF** | **A definir** | **Unificar `esp32_prestamo_lector_USUARIO.cpp` + `esp32_prestamo_lector_HERRAMIENTA.cpp` en un solo módulo.** Ver §4 abajo (decisión pendiente). |
+| ~~HW-UNIF~~ | ~~A definir~~ | ~~Unificar `esp32_prestamo_lector_USUARIO.cpp` + `esp32_prestamo_lector_HERRAMIENTA.cpp`.~~ **HECHO** (2026-04-27): `esp32_prestamo_lector_UNIFICADO.cpp` validado en docker. Ver `CHANGELOG.md`. |
 
 ## 2. Backend Node.js (`www/flutter-api/`)
 
@@ -41,33 +41,22 @@ Lista priorizada de mejoras que **no** se aplicaron en los commits del bloque
 | PHP-U | Baja | `Database::query` requiere `mysqlnd` (`fetch_all`). Si el deploy no lo tiene, falla raro. |
 | PHP-X | Baja | `auth/login.php` hardcoded a `/Auth/register` aunque ese endpoint ahora requiere auth (PHP-C). Actualizar el copy o esconder el link si no estás logueado. |
 
-## 4. HW-UNIF · Unificar lector USUARIO + HERRAMIENTA
+## 4. HW-UNIF · Unificar lector USUARIO + HERRAMIENTA — HECHO (2026-04-27)
 
-Pregunta abierta del usuario (2026-04-27):
+Resuelto en `esp32_prestamo_lector_UNIFICADO.cpp` con las siguientes
+decisiones tomadas:
 
-> ¿Se pueden unificar `esp32_prestamo_lector_USUARIO.cpp` y
-> `esp32_prestamo_lector_HERRAMIENTA.cpp` en un solo módulo? Que la ESP32
-> detecte si es tarjeta, inicie sesión, y mientras esté abierta cargar
-> herramientas; después cerrar la sesión con la misma tarjeta. Timeout
-> automático de inactividad.
-
-**Respuesta corta**: sí, es viable y recomendable. Permite reducir hardware
-(una caja en lugar de dos) y tiene una UX más natural.
-
-Decisiones de diseño que faltan acordar antes de implementar — están
-discutidas en el chat del 2026-04-27 y resumidas abajo:
-
-1. **¿Hardware físico**: ¿se descarta una de las dos cajas o se mantienen
-   ambas?
-2. **¿Quién diferencia credencial vs herramienta**: ESP32 (por longitud de
-   UID o tipo PICC) o backend (consulta a `cards` y luego a `equipments`)?
-   Recomendado: backend.
-3. **¿Comportamiento si entra una credencial DIFERENTE estando en sesión**:
-   ¿cerrar la sesión actual o rechazar?
-4. **Timeout sugerido**: hoy es 150 s en USUARIO. ¿Se mantiene?
-5. **Topic MQTT**: ¿se mantienen los dos (`loan_queryu` y `loan_querye`) y
-   el firmware decide a cuál publicar según estado de sesión, o se crea un
-   topic único `loan_query` y el backend resuelve?
+1. **Hardware físico**: una sola caja. SN `SMART10003` reusado, IP `.34`
+   conservada. SN `SMART10002` queda libre para futuras estaciones.
+2. **Quién diferencia credencial vs herramienta**: el backend. El firmware
+   solo sabe si tiene sesión.
+3. **Credencial ajena durante sesión activa**: rechazar (`refused`).
+4. **Timeout de inactividad**: 180 s, reseteado en cada interacción
+   (préstamo, devolución, refused, nofound).
+5. **Topic MQTT**: se mantuvieron los dos. Sin sesión → `loan_queryu`. Con
+   sesión → `loan_querye`. El backend resuelve los tres casos en
+   `handleLoanEquipmentQuery`. Cero cambios en el contrato MQTT respecto a
+   clientes externos.
 
 ---
 
