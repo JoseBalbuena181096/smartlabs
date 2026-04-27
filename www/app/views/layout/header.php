@@ -6,6 +6,7 @@
   <meta name="description" content="Sistema de Auto Préstamo SMARTLABS" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimal-ui" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="csrf-token" content="<?= Controller::e(Controller::csrfToken()) ?>">
 
   <!-- for ios 7 style, multi-resolution icon of 152x152 -->
   <meta name="apple-mobile-web-app-capable" content="yes">

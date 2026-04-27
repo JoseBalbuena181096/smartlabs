@@ -44,6 +44,38 @@ class Controller {
         }
     }
 
+    /**
+     * Restringe la acción a usuarios con rol 'admin'. Requiere que la
+     * migración 001_users_role esté aplicada y que el usuario en sesión
+     * tenga ese rol. Para AJAX devuelve 403 JSON; para HTML, 403 simple.
+     */
+    protected function requireAdmin() {
+        $this->requireAuth();
+
+        $role = $_SESSION['users_role'] ?? null;
+        if ($role === null) {
+            // primera vez tras login: cargar de DB
+            $userId = $_SESSION['user_id'] ?? 0;
+            if ($userId) {
+                $row = $this->db->query("SELECT users_role FROM users WHERE users_id = ?", [$userId]);
+                $role = !empty($row) ? ($row[0]['users_role'] ?? 'user') : 'user';
+                $_SESSION['users_role'] = $role;
+            }
+        }
+
+        if ($role !== 'admin') {
+            http_response_code(403);
+            $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+            if (stripos($accept, 'application/json') !== false || !empty($_SERVER['HTTP_X_REQUESTED_WITH'])) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Permisos insuficientes']);
+            } else {
+                echo '<h1>403 - Solo administradores</h1>';
+            }
+            exit();
+        }
+    }
+
     protected function view($viewName, $data = []) {
         extract($data);
         $viewFile = __DIR__ . "/../views/{$viewName}.php";

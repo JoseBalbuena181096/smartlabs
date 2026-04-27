@@ -17,11 +17,12 @@ class LoanAdminController extends Controller {
     
     public function index() {
         // Manejar diferentes tipos de peticiones AJAX
-        if ($_POST) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->verifyCsrf();
+
             // Búsqueda de usuarios
             if (isset($_POST['search_user'])) {
                 $query = strip_tags($_POST['search_user']);
-                // Sanear el query eliminando prefijo "APP:" si existe
                 $query = $this->sanitizeRfid($query);
                 if (!empty($query)) {
                     $users = $this->buscarUsuarios($query);
@@ -29,55 +30,55 @@ class LoanAdminController extends Controller {
                     exit();
                 }
             }
-            
+
             // Consulta de préstamos de un usuario específico
             if (isset($_POST['consult_loan_admin'])) {
                 $userRfid = strip_tags($_POST['consult_loan_admin']);
-                // Sanear el RFID eliminando prefijo "APP:" si existe
                 $userRfid = $this->sanitizeRfid($userRfid);
                 if (!empty($userRfid)) {
                     echo $this->consultarPrestamosAdmin($userRfid);
                     exit();
                 }
             }
-            
+
             // Devolver préstamo
             if (isset($_POST['return_loan'])) {
-                $equipmentRfid = strip_tags($_POST['equipment_rfid']);
-                $userRfid = strip_tags($_POST['user_rfid']);
-                
-                // Sanear ambos RFIDs eliminando prefijo "APP:" si existe
+                $equipmentRfid = strip_tags($_POST['equipment_rfid'] ?? '');
+                $userRfid = strip_tags($_POST['user_rfid'] ?? '');
+
                 $equipmentRfid = $this->sanitizeRfid($equipmentRfid);
                 $userRfid = $this->sanitizeRfid($userRfid);
-                
+
                 if (!empty($equipmentRfid) && !empty($userRfid)) {
                     $result = $this->devolverPrestamo($equipmentRfid, $userRfid);
                     echo json_encode($result);
                     exit();
                 }
             }
-            
+
             // Mostrar todos los préstamos
             if (isset($_POST['show_all_loans'])) {
                 echo $this->mostrarTodosLosPrestamos();
                 exit();
             }
-            
-            // Exportar CSV (método tradicional)
+
+            // Exportar CSV: solo admins (PII de la base entera).
             if (isset($_POST['export_csv'])) {
+                $this->requireAdmin();
                 $this->exportarCSV();
                 exit();
             }
-            
-            // Generar CSV como JSON para descarga AJAX
+
             if (isset($_POST['generate_csv_json'])) {
+                $this->requireAdmin();
                 $this->generarCSVJSON();
                 exit();
             }
         }
-        
-        // Mostrar vista principal
-        $this->view('loan_admin/index');
+
+        $this->view('loan_admin/index', [
+            'csrf' => self::csrfToken(),
+        ]);
     }
     
     /**

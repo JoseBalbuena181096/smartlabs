@@ -53,6 +53,8 @@ class AuthController extends Controller {
                         $_SESSION['logged']       = true;
                         $_SESSION['user_id']      = $user['users_id'];
                         $_SESSION['users_email']  = $user['users_email'];
+                        // Si la migración 001 está aplicada, hay rol; si no, asume 'user'.
+                        $_SESSION['users_role']   = $user['users_role'] ?? 'user';
                         $_SESSION['last_regeneration'] = time();
 
                         // Solo cargar dispositivos del usuario actual, no todos.

@@ -14,35 +14,46 @@ class DeviceController extends Controller {
     
     public function index() {
         $userId = $_SESSION['user_id'];
-        $devices = $this->deviceModel->findByUserId($userId);
-        
-        // Manejar eliminación
-        if ($_POST && isset($_POST['id_to_delete']) && !empty($_POST['id_to_delete'])) {
-            $idToDelete = (int)$_POST['id_to_delete'];
-            $this->deviceModel->delete($idToDelete);
-            $this->redirect('Device');
-        }
-        
-        // Manejar creación
-        if ($_POST && isset($_POST['serie']) && isset($_POST['alias'])) {
-            $alias = $this->sanitize($_POST['alias']);
-            $serie = $this->sanitize($_POST['serie']);
-            
-            if (!empty($alias) && !empty($serie)) {
-                $this->deviceModel->create($alias, $serie, $userId);
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->verifyCsrf();
+
+            // Manejar eliminación
+            if (!empty($_POST['id_to_delete'])) {
+                $idToDelete = (int)$_POST['id_to_delete'];
+                $device = $this->deviceModel->findById($idToDelete);
+                if ($device && (int)$device['devices_user_id'] === (int)$userId) {
+                    $this->deviceModel->delete($idToDelete);
+                }
                 $this->redirect('Device');
             }
+
+            // Manejar creación
+            if (isset($_POST['serie']) && isset($_POST['alias'])) {
+                $alias = $this->sanitize($_POST['alias']);
+                $serie = $this->sanitize($_POST['serie']);
+
+                if (!empty($alias) && !empty($serie)) {
+                    $this->deviceModel->create($alias, $serie, $userId);
+                    $this->redirect('Device');
+                }
+            }
         }
-        
+
+        $devices = $this->deviceModel->findByUserId($userId);
+
         $this->view('device/index', [
-            'devices' => $devices
+            'devices' => $devices,
+            'csrf'    => self::csrfToken(),
         ]);
     }
     
     public function create() {
-        if ($_POST) {
-            $alias = $this->sanitize($_POST['alias']);
-            $serie = $this->sanitize($_POST['serie']);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->verifyCsrf();
+
+            $alias = $this->sanitize($_POST['alias'] ?? '');
+            $serie = $this->sanitize($_POST['serie'] ?? '');
             $userId = $_SESSION['user_id'];
             
             if (empty($alias) || empty($serie)) {
@@ -81,36 +92,42 @@ class DeviceController extends Controller {
     
     public function edit($id) {
         $device = $this->deviceModel->findById($id);
-        
-        if (!$device) {
+
+        if (!$device || (int)$device['devices_user_id'] !== (int)$_SESSION['user_id']) {
             $this->redirect('Device');
             return;
         }
-        
-        if ($_POST) {
-            $alias = $this->sanitize($_POST['alias']);
-            $serie = $this->sanitize($_POST['serie']);
-            
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->verifyCsrf();
+
+            $alias = $this->sanitize($_POST['alias'] ?? '');
+            $serie = $this->sanitize($_POST['serie'] ?? '');
+
             if (!empty($alias) && !empty($serie)) {
                 $this->deviceModel->update($id, $alias, $serie);
                 $this->redirect('Device');
             }
         }
-        
+
         $this->view('device/edit', [
-            'device' => $device
+            'device' => $device,
+            'csrf'   => self::csrfToken(),
         ]);
     }
-    
+
     public function delete($id) {
-        $this->deviceModel->delete($id);
+        $device = $this->deviceModel->findById($id);
+        if ($device && (int)$device['devices_user_id'] === (int)$_SESSION['user_id']) {
+            $this->deviceModel->delete($id);
+        }
         $this->redirect('Device');
     }
-    
+
     public function update() {
         // Establecer header JSON
         header('Content-Type: application/json');
-        
+
         // Verificar que sea una petición POST
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             echo json_encode([
@@ -119,6 +136,8 @@ class DeviceController extends Controller {
             ]);
             return;
         }
+
+        $this->verifyCsrf();
         
         // Obtener datos del POST
         $deviceId = isset($_POST['device_id']) ? (int)$_POST['device_id'] : 0;

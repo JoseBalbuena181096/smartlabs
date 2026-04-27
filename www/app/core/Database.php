@@ -32,7 +32,26 @@ class Database {
         return $this->connection;
     }
     
+    /**
+     * Asegura que la conexión esté viva. MySQL/MariaDB cierra el socket tras
+     * `wait_timeout` (default 8h). Si el ping falla, reabre la conexión.
+     */
+    private function ensureAlive() {
+        if (!$this->connection || !$this->connection->ping()) {
+            $config = require __DIR__ . '/../../config/database.php';
+            $this->connection = new mysqli(
+                $config['host'],
+                $config['username'],
+                $config['password'],
+                $config['database'],
+                $config['port']
+            );
+            $this->connection->set_charset($config['charset']);
+        }
+    }
+
     private function bindAndExecute($sql, $params) {
+        $this->ensureAlive();
         $stmt = $this->connection->prepare($sql);
 
         if (!empty($params)) {

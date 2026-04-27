@@ -16,23 +16,23 @@ class LoanController extends Controller {
     }
     
     public function index() {
-        // Manejar petición AJAX de consulta de préstamos (como dash_loan.php)
-        if ($_POST && isset($_POST['consult_loan'])) {
+        // Manejar petición AJAX de consulta de préstamos
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['consult_loan'])) {
+            $this->verifyCsrf();
             $consult_loan = strip_tags($_POST['consult_loan']);
-            
-            // Sanear el RFID eliminando prefijo "APP:" si existe
             $consult_loan = $this->sanitizeRfid($consult_loan);
-            
+
             if (!empty($consult_loan)) {
                 echo $this->consultarPrestamos($consult_loan);
-                exit(); // Terminar ejecución para AJAX
+                exit();
             }
         }
-        
+
         $activeLoans = $this->loanModel->getActiveLoans();
-        
+
         $this->view('loan/index', [
-            'loans' => $activeLoans
+            'loans' => $activeLoans,
+            'csrf'  => self::csrfToken(),
         ]);
     }
     
@@ -256,9 +256,10 @@ class LoanController extends Controller {
     }
     
     public function create() {
-        if ($_POST) {
-            $habRfid = $this->sanitize($_POST['hab_rfid']);
-            $equipRfid = $this->sanitize($_POST['equip_rfid']);
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->verifyCsrf();
+            $habRfid = $this->sanitize($_POST['hab_rfid'] ?? '');
+            $equipRfid = $this->sanitize($_POST['equip_rfid'] ?? '');
             
             if (empty($habRfid) || empty($equipRfid)) {
                 $equipments = $this->equipmentModel->getAvailableEquipments();
@@ -290,43 +291,51 @@ class LoanController extends Controller {
                 $this->redirect('Loan');
             } else {
                 $equipments = $this->equipmentModel->getAvailableEquipments();
-                
+
                 $this->view('loan/create', [
                     'error' => 'Error al crear el préstamo',
                     'hab_rfid' => $habRfid,
                     'equip_rfid' => $equipRfid,
-                    'equipments' => $equipments
+                    'equipments' => $equipments,
+                    'csrf'   => self::csrfToken(),
                 ]);
             }
         } else {
             $equipments = $this->equipmentModel->getAvailableEquipments();
-            
+
             $this->view('loan/create', [
-                'equipments' => $equipments
+                'equipments' => $equipments,
+                'csrf'       => self::csrfToken(),
             ]);
         }
     }
-    
+
     public function return($equipRfid = null) {
-        if ($_POST) {
-            $habRfid = $this->sanitize($_POST['hab_rfid']);
-            $equipRfid = $this->sanitize($_POST['equip_rfid']);
-            
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->verifyCsrf();
+            $habRfid = $this->sanitize($_POST['hab_rfid'] ?? '');
+            $equipRfid = $this->sanitize($_POST['equip_rfid'] ?? '');
+
             if ($this->loanModel->returnLoan($habRfid, $equipRfid)) {
                 $this->redirect('Loan');
             } else {
                 $this->view('loan/return', [
-                    'error' => 'Error al devolver el equipo'
+                    'error' => 'Error al devolver el equipo',
+                    'csrf'  => self::csrfToken(),
                 ]);
             }
         } else {
             $this->view('loan/return', [
-                'equip_rfid' => $equipRfid
+                'equip_rfid' => $equipRfid,
+                'csrf'       => self::csrfToken(),
             ]);
         }
     }
-    
+
     public function delete($id) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->verifyCsrf();
+        }
         $this->loanModel->delete($id);
         $this->redirect('Loan/history');
     }

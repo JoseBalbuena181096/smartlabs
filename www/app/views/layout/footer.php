@@ -2,6 +2,39 @@
 
     <!-- Scripts -->
     <script src="/libs/jquery/jquery/dist/jquery.js"></script>
+    <script>
+      // CSRF: inyecta el token en cada AJAX (jQuery + fetch). El backend
+      // espera el token en el header X-CSRF-Token o en el campo _csrf del POST.
+      (function () {
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        if (!meta) return;
+        var token = meta.getAttribute('content');
+        window.SMARTLABS_CSRF = token;
+
+        if (window.jQuery) {
+          jQuery.ajaxSetup({
+            beforeSend: function (xhr) {
+              xhr.setRequestHeader('X-CSRF-Token', token);
+            }
+          });
+        }
+
+        if (window.fetch) {
+          var origFetch = window.fetch;
+          window.fetch = function (input, init) {
+            init = init || {};
+            var method = (init.method || (typeof input === 'object' && input.method) || 'GET').toUpperCase();
+            if (method !== 'GET' && method !== 'HEAD') {
+              init.headers = new Headers(init.headers || {});
+              if (!init.headers.has('X-CSRF-Token')) {
+                init.headers.set('X-CSRF-Token', token);
+              }
+            }
+            return origFetch.call(this, input, init);
+          };
+        }
+      })();
+    </script>
     <script src="/libs/jquery/tether/dist/js/tether.min.js"></script>
     <script src="/libs/jquery/bootstrap/dist/js/bootstrap.js"></script>
     <script src="/libs/jquery/underscore/underscore-min.js"></script>
