@@ -89,7 +89,18 @@ class LoanAdminController extends Controller {
         }
         return $rfidInput;
     }
-    
+
+    /**
+     * Serializa un valor para inyectarlo de forma segura como argumento JS dentro
+     * de un atributo HTML (onclick="..."). json_encode escapa para JS;
+     * htmlspecialchars escapa para el atributo. Evita XSS si el valor contiene
+     * comillas, backslashes, < o &.
+     */
+    private function jsArg($value) {
+        $json = json_encode((string)$value, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG);
+        return htmlspecialchars($json, ENT_QUOTES, 'UTF-8');
+    }
+
     /**
      * Buscar usuarios por matrícula, nombre o correo
      */
@@ -239,7 +250,7 @@ class LoanAdminController extends Controller {
                         $output .= '<td><span class="badge badge-info">' . htmlspecialchars($loan["equipments_brand"]) . '</span></td>';
                         $output .= '<td><small class="text-muted">' . $tiempo_transcurrido . '</small></td>';
                         $output .= '<td>';
-                        $output .= '<button class="btn btn-danger btn-sm btn-return" onclick="confirmarDevolucion(\'' . $equip_rfid . '\', \'' . $userRfid . '\', \'' . htmlspecialchars($loan["equipments_name"]) . '\')">';
+                        $output .= '<button class="btn btn-danger btn-sm btn-return" onclick="confirmarDevolucion(' . $this->jsArg($equip_rfid) . ', ' . $this->jsArg($userRfid) . ', ' . $this->jsArg($loan["equipments_name"]) . ')">';
                         $output .= '<i class="fa fa-undo mr-1"></i>DEVOLVER';
                         $output .= '</button>';
                         $output .= '</td>';
@@ -247,7 +258,7 @@ class LoanAdminController extends Controller {
                     }
                 }
             }
-            
+
             $output .= '</tbody>';
             $output .= '</table>';
             $output .= '</div>';
@@ -268,22 +279,40 @@ class LoanAdminController extends Controller {
     }
     
     /**
-     * Devolver un préstamo específico
+     * Devolver un préstamo específico.
+     * Valida que exista un préstamo activo para ese par equipo+usuario antes de
+     * registrar la devolución, y delega al modelo (INSERT append-only con state=0).
      */
     private function devolverPrestamo($equipmentRfid, $userRfid) {
         try {
-            // Insertar registro de devolución
-            $sql = "INSERT INTO loans (loans_hab_rfid, loans_equip_rfid, loans_state, loans_date) 
-                    VALUES (?, ?, 0, NOW())";
-            
-            $this->db->query($sql, [$userRfid, $equipmentRfid]);
-            
+            $active = $this->loanModel->getActiveLoanByEquipment($equipmentRfid);
+            if (!$active) {
+                return [
+                    'success' => false,
+                    'message' => 'El equipo no tiene un préstamo activo'
+                ];
+            }
+            if ($active['loans_hab_rfid'] !== $userRfid) {
+                return [
+                    'success' => false,
+                    'message' => 'El equipo está prestado a otro usuario'
+                ];
+            }
+
+            $ok = $this->loanModel->returnLoan($userRfid, $equipmentRfid);
+            if (!$ok) {
+                return [
+                    'success' => false,
+                    'message' => 'No se pudo registrar la devolución'
+                ];
+            }
+
             return [
                 'success' => true,
                 'message' => 'Devolución procesada exitosamente',
                 'datetime' => date('Y-m-d H:i:s')
             ];
-            
+
         } catch (Exception $e) {
             return [
                 'success' => false,
@@ -388,7 +417,7 @@ class LoanAdminController extends Controller {
                 $output .= '<td><span class="badge badge-info">' . htmlspecialchars($loan["equipments_brand"]) . '</span></td>';
                 $output .= '<td><small class="text-muted">' . $tiempo_transcurrido . '</small></td>';
                 $output .= '<td>';
-                $output .= '<button class="btn btn-danger btn-sm btn-return" onclick="confirmarDevolucion(\'' . $loan["equipments_rfid"] . '\', \'' . $loan["loans_hab_rfid"] . '\', \'' . htmlspecialchars($loan["equipments_name"]) . '\')">';
+                $output .= '<button class="btn btn-danger btn-sm btn-return" onclick="confirmarDevolucion(' . $this->jsArg($loan["equipments_rfid"]) . ', ' . $this->jsArg($loan["loans_hab_rfid"]) . ', ' . $this->jsArg($loan["equipments_name"]) . ')">';
                 $output .= '<i class="fa fa-undo mr-1"></i>DEVOLVER';
                 $output .= '</button>';
                 $output .= '</td>';

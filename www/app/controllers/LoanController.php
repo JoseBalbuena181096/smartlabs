@@ -286,7 +286,7 @@ class LoanController extends Controller {
                 return;
             }
             
-            if ($this->loanModel->create($habRfid, $equipRfid, true)) {
+            if ($this->loanModel->create($habRfid, $equipRfid, 1)) {
                 $this->redirect('Loan');
             } else {
                 $equipments = $this->equipmentModel->getAvailableEquipments();

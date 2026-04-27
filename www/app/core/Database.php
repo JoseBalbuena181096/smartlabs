@@ -5,19 +5,19 @@ class Database {
     
     private function __construct() {
         $config = require_once __DIR__ . '/../../config/database.php';
-        
+
+        // Reporta errores de mysqli como excepciones para que los try/catch funcionen
+        // y para no morir con die() filtrando el SQL al usuario final.
+        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
         $this->connection = new mysqli(
-            $config['host'], 
-            $config['username'], 
-            $config['password'], 
-            $config['database'], 
+            $config['host'],
+            $config['username'],
+            $config['password'],
+            $config['database'],
             $config['port']
         );
-        
-        if ($this->connection->connect_error) {
-            die("Error de conexión: " . $this->connection->connect_error);
-        }
-        
+
         $this->connection->set_charset($config['charset']);
     }
     
@@ -32,13 +32,13 @@ class Database {
         return $this->connection;
     }
     
-    public function query($sql, $params = []) {
+    private function bindAndExecute($sql, $params) {
         $stmt = $this->connection->prepare($sql);
-        
+
         if (!empty($params)) {
             $types = '';
             foreach ($params as $param) {
-                if (is_int($param)) {
+                if (is_int($param) || is_bool($param)) {
                     $types .= 'i';
                 } elseif (is_float($param)) {
                     $types .= 'd';
@@ -46,43 +46,26 @@ class Database {
                     $types .= 's';
                 }
             }
-            $stmt->bind_param($types, ...$params);
+            // bool → int para que bind_param ('i') reciba un valor numérico real.
+            $bound = array_map(static function ($v) {
+                return is_bool($v) ? (int)$v : $v;
+            }, $params);
+            $stmt->bind_param($types, ...$bound);
         }
-        
+
         $stmt->execute();
-        
-        if ($stmt->error) {
-            die("Error en la consulta: " . $stmt->error);
-        }
-        
+        return $stmt;
+    }
+
+    public function query($sql, $params = []) {
+        $stmt = $this->bindAndExecute($sql, $params);
         $result = $stmt->get_result();
         return $result ? $result->fetch_all(MYSQLI_ASSOC) : [];
     }
-    
+
     public function execute($sql, $params = []) {
-        $stmt = $this->connection->prepare($sql);
-        
-        if (!empty($params)) {
-            $types = '';
-            foreach ($params as $param) {
-                if (is_int($param)) {
-                    $types .= 'i';
-                } elseif (is_float($param)) {
-                    $types .= 'd';
-                } else {
-                    $types .= 's';
-                }
-            }
-            $stmt->bind_param($types, ...$params);
-        }
-        
-        $result = $stmt->execute();
-        
-        if ($stmt->error) {
-            die("Error en la ejecución: " . $stmt->error);
-        }
-        
-        return $result;
+        $this->bindAndExecute($sql, $params);
+        return true;
     }
     
     public function lastInsertId() {
