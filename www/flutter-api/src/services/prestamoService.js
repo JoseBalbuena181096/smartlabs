@@ -1,671 +1,361 @@
 const dbConfig = require('../config/database');
 const mqttConfig = require('../config/mqtt');
-const mqtt = require('mqtt');
 
 /**
- * Servicio para manejo de préstamos de dispositivos
- * Sustituye la funcionalidad del dispositivo físico main_usuariosLV2.cpp
+ * Servicio de préstamo de equipos.
+ *
+ * Cambios respecto a la versión anterior:
+ *   - BE-D: usa el cliente MQTT singleton (config/mqtt.js) en lugar de abrir
+ *     una conexión propia.
+ *   - BE-F: usa el pool MySQL (config/database.js) en lugar de
+ *     mysql.createConnection en cada método.
+ *   - BE-B: la sesión de préstamo (countLoanCard / serialLoanUser) se
+ *     persiste en la tabla `loan_sessions` (migración 002). Sobrevive
+ *     reinicios del proceso, soporta varios pares USUARIO+HERRAMIENTA y
+ *     evita la race condition implícita gracias al PRIMARY KEY por device.
+ *   - BE-I: ya no publica `APP:rfid` desde procesarPrestamo (era código
+ *     zombie que el filtro luego ignoraba).
+ *   - El método handleLoanUserQuery publica `nofound` cuando el usuario
+ *     no existe (ya estaba aplicado en commit anterior, mantenido).
  */
 class PrestamoService {
     constructor() {
-        this.mqttClient = null;
-        this.serialLoanUser = null;
-        this.countLoanCard = 0;
-        this.initMQTT();
+        // Sin estado en memoria: todo va a `loan_sessions`.
     }
 
-    /**
-     * Inicializa la conexión MQTT
-     */
-    async initMQTT() {
+    // ---------------------------------------------------------------
+    // MQTT helpers (singleton)
+    // ---------------------------------------------------------------
+    async _publish(topic, message) {
         try {
-            const mqttOptions = {
-                host: process.env.MQTT_HOST || process.env.SERVER_HOST || '192.168.0.100',
-                port: process.env.MQTT_PORT || 1883,
-                username: process.env.MQTT_USERNAME || 'jose',
-                password: process.env.MQTT_PASSWORD || 'public',
-                clientId: `flutter_api_${Math.round(Math.random() * 10000)}`,
-                clean: true,
-                connectTimeout: 4000,
-                reconnectPeriod: 1000
-            };
-
-            this.mqttClient = mqtt.connect(`mqtt://${mqttOptions.host}`, mqttOptions);
-            
-            this.mqttClient.on('connect', () => {
-                console.log('✅ Flutter API conectado a MQTT broker');
-            });
-            
-            this.mqttClient.on('error', (error) => {
-                console.error('❌ Error MQTT en Flutter API:', error);
-            });
-            
-        } catch (error) {
-            console.error('❌ Error inicializando MQTT:', error);
+            if (!mqttConfig.isConnected()) {
+                console.warn('⚠️ MQTT no conectado, no se publicó en', topic);
+                return false;
+            }
+            await mqttConfig.publish(topic, String(message));
+            return true;
+        } catch (err) {
+            console.error('❌ Error publicando MQTT', topic, err.message);
+            return false;
         }
     }
 
     /**
-     * Obtiene información de un usuario por matrícula
-     * Incluye información de la tarjeta RFID usando la vista cards_habs
-     * @param {string} registration - Matrícula del usuario
-     * @returns {Object|null} - Datos del usuario o null si no existe
+     * Publica user_name y/o command para una estación.
      */
+    async enviarComandosMQTT(deviceSerie, userName, command) {
+        if (userName) {
+            await this._publish(`${deviceSerie}/user_name`, userName);
+        }
+        if (command) {
+            await this._publish(`${deviceSerie}/command`, command);
+        }
+        return { success: true, topic: `${deviceSerie}/command`, message: command };
+    }
+
+    // ---------------------------------------------------------------
+    // DB helpers (pool)
+    // ---------------------------------------------------------------
     async getUserByRegistration(registration) {
-        let connection = null;
-        try {
-            const mysql = require('mysql2/promise');
-            connection = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT
-            });
-            
-            // Usar la vista cards_habs para obtener información completa del usuario incluyendo RFID
-            const [rows] = await connection.execute(
-                `SELECT 
-                    h.hab_id,
-                    h.hab_date,
-                    h.hab_name,
-                    h.hab_registration,
-                    h.hab_email,
-                    h.hab_card_id,
-                    h.hab_device_id,
-                    ch.cards_number,
-                    ch.cards_assigned
-                FROM habintants h
-                LEFT JOIN cards_habs ch ON h.hab_id = ch.hab_id
-                WHERE h.hab_registration = ?`,
-                [registration]
-            );
-            
-            if (rows.length > 0) {
-                const user = rows[0];
-                console.log(`✅ Usuario encontrado por matrícula ${registration}:`, {
-                    hab_id: user.hab_id,
-                    hab_name: user.hab_name,
-                    hab_registration: user.hab_registration,
-                    cards_number: user.cards_number
-                });
-                return user;
-            }
-            
-            console.log(`❌ No se encontró usuario con matrícula: ${registration}`);
-            return null;
-        } catch (error) {
-            console.error('❌ Error obteniendo usuario:', error);
-            return null;
-        } finally {
-            if (connection) {
-                await connection.end();
-            }
-        }
+        const rows = await dbConfig.execute(
+            `SELECT
+                h.hab_id, h.hab_date, h.hab_name, h.hab_registration, h.hab_email,
+                h.hab_card_id, h.hab_device_id,
+                ch.cards_number, ch.cards_assigned
+             FROM habintants h
+             LEFT JOIN cards_habs ch ON h.hab_id = ch.hab_id
+             WHERE h.hab_registration = ?`,
+            [registration]
+        );
+        return rows.length ? rows[0] : null;
     }
 
-    /**
-     * Obtiene información de un usuario por número RFID
-     * Replica la funcionalidad del backend Node.js para consultas RFID del hardware
-     * @param {string} rfidNumber - Número RFID de la tarjeta
-     * @returns {Object|null} - Datos del usuario o null si no existe
-     */
     async getUserByRFID(rfidNumber) {
-        let connection = null;
-        try {
-            const mysql = require('mysql2/promise');
-            connection = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT
-            });
-            
-            // Usar la vista cards_habs igual que el backend Node.js
-            const [rows] = await connection.execute(
-                `SELECT 
-                    ch.cards_id,
-                    ch.cards_number,
-                    ch.cards_assigned,
-                    ch.hab_id,
-                    ch.hab_name,
-                    ch.hab_device_id
-                FROM cards_habs ch 
-                WHERE ch.cards_number = ?`,
-                [rfidNumber]
-            );
-            
-            if (rows.length > 0) {
-                console.log(`✅ Usuario encontrado por RFID ${rfidNumber}:`, rows[0]);
-                return rows[0];
-            }
-            
-            console.log(`❌ No se encontró usuario con RFID: ${rfidNumber}`);
-            return null;
-        } catch (error) {
-            console.error('❌ Error obteniendo usuario por RFID:', error);
-            return null;
-        } finally {
-            if (connection) {
-                await connection.end();
-            }
-        }
+        const rows = await dbConfig.execute(
+            `SELECT cards_id, cards_number, cards_assigned, hab_id, hab_name, hab_device_id
+             FROM cards_habs
+             WHERE cards_number = ?`,
+            [rfidNumber]
+        );
+        return rows.length ? rows[0] : null;
     }
 
-    /**
-     * Obtiene información de un dispositivo por serie
-     * @param {string} deviceSerie - Serie del dispositivo
-     * @returns {Object|null} - Datos del dispositivo o null si no existe
-     */
     async getDeviceBySerie(deviceSerie) {
-        let connection = null;
-        try {
-            const mysql = require('mysql2/promise');
-            connection = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT
-            });
-            
-            const [rows] = await connection.execute(
-                'SELECT * FROM devices WHERE devices_serie = ?',
-                [deviceSerie]
-            );
-            return rows.length > 0 ? rows[0] : null;
-        } catch (error) {
-            console.error('❌ Error obteniendo dispositivo:', error);
-            return null;
-        } finally {
-            if (connection) {
-                await connection.end();
-            }
-        }
+        const rows = await dbConfig.execute(
+            'SELECT * FROM devices WHERE devices_serie = ?',
+            [deviceSerie]
+        );
+        return rows.length ? rows[0] : null;
     }
 
-    /**
-     * Registra préstamo de equipo en la base de datos
-     * @param {string} userRFID - RFID del usuario
-     * @param {string} equipRFID - RFID del equipo
-     * @param {number} state - Estado del préstamo (1=prestado, 0=devuelto)
-     * @returns {boolean} - True si se registró correctamente
-     */
+    async getEquipmentByRFID(equipRFID) {
+        const rows = await dbConfig.execute(
+            'SELECT * FROM equipments WHERE equipments_rfid = ?',
+            [equipRFID]
+        );
+        return rows.length ? rows[0] : null;
+    }
+
+    async getLastLoan(equipRFID) {
+        const rows = await dbConfig.execute(
+            'SELECT * FROM loans WHERE loans_equip_rfid = ? ORDER BY loans_date DESC LIMIT 1',
+            [equipRFID]
+        );
+        return rows.length ? rows[0] : null;
+    }
+
     async registrarPrestamo(userRFID, equipRFID, state) {
-        let connection = null;
         try {
-            const mysql = require('mysql2/promise');
-            connection = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT
-            });
-            
-            await connection.execute(
-                `INSERT INTO loans (loans_date, loans_hab_rfid, loans_equip_rfid, loans_state) 
+            await dbConfig.execute(
+                `INSERT INTO loans (loans_date, loans_hab_rfid, loans_equip_rfid, loans_state)
                  VALUES (CURRENT_TIMESTAMP, ?, ?, ?)`,
                 [userRFID, equipRFID, state]
             );
             return true;
-        } catch (error) {
-            console.error('❌ Error registrando préstamo:', error);
+        } catch (err) {
+            console.error('❌ Error registrando préstamo:', err.message);
             return false;
-        } finally {
-            if (connection) {
-                await connection.end();
-            }
         }
     }
 
-    /**
-     * Obtiene el último préstamo de un equipo
-     * @param {string} equipRFID - RFID del equipo
-     * @returns {Object|null} - Último préstamo o null
-     */
-    async getLastLoan(equipRFID) {
-        let connection = null;
-        try {
-            const mysql = require('mysql2/promise');
-            connection = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT
-            });
-            
-            const [rows] = await connection.execute(
-                'SELECT * FROM loans WHERE loans_equip_rfid = ? ORDER BY loans_date DESC LIMIT 1',
-                [equipRFID]
-            );
-            
-            return rows.length > 0 ? rows[0] : null;
-        } catch (error) {
-            console.error('❌ Error obteniendo último préstamo:', error);
-            return null;
-        } finally {
-            if (connection) {
-                await connection.end();
-            }
-        }
-    }
-
-    /**
-     * Obtiene información de un equipo por RFID
-     * @param {string} equipRFID - RFID del equipo
-     * @returns {Object|null} - Datos del equipo o null si no existe
-     */
-    async getEquipmentByRFID(equipRFID) {
-        let connection = null;
-        try {
-            const mysql = require('mysql2/promise');
-            connection = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT
-            });
-            
-            const [rows] = await connection.execute(
-                'SELECT * FROM equipments WHERE equipments_rfid = ?',
-                [equipRFID]
-            );
-            
-            return rows.length > 0 ? rows[0] : null;
-        } catch (error) {
-            console.error('❌ Error obteniendo equipo:', error);
-            return null;
-        } finally {
-            if (connection) {
-                await connection.end();
-            }
-        }
-    }
-
-    /**
-     * Registra el tráfico/préstamo en la base de datos
-     * @param {string} userId - ID del usuario
-     * @param {string} deviceSerie - Serie del dispositivo
-     * @param {boolean} state - Estado del dispositivo (true=encendido, false=apagado)
-     * @returns {boolean} - True si se registró correctamente
-     */
     async registrarTrafico(userId, deviceSerie, state) {
-        let connection = null;
         try {
-            const mysql = require('mysql2/promise');
-            connection = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
-                database: process.env.DB_NAME,
-                port: process.env.DB_PORT
-            });
-            
-            await connection.execute(
-                `INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state) 
+            await dbConfig.execute(
+                `INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state)
                  VALUES (CURRENT_TIMESTAMP, ?, ?, ?)`,
                 [userId, deviceSerie, state]
             );
             return true;
-        } catch (error) {
-            console.error('❌ Error registrando tráfico:', error);
+        } catch (err) {
+            console.error('❌ Error registrando tráfico:', err.message);
             return false;
-        } finally {
-            if (connection) {
-                await connection.end();
-            }
         }
     }
 
+    // ---------------------------------------------------------------
+    // Sesión persistente (tabla loan_sessions, migración 002)
+    // ---------------------------------------------------------------
+    async _loadSession(deviceSerie) {
+        try {
+            const rows = await dbConfig.execute(
+                'SELECT * FROM loan_sessions WHERE device_serie = ? LIMIT 1',
+                [deviceSerie]
+            );
+            return rows.length ? rows[0] : null;
+        } catch (err) {
+            // Si la migración 002 aún no se aplicó, degradar a null para no romper
+            // (modo legacy: no hay sesión persistida, equivale a sin login).
+            if (err && err.code === 'ER_NO_SUCH_TABLE') {
+                console.warn('⚠️ Tabla loan_sessions no existe (aplica migración 002)');
+                return null;
+            }
+            throw err;
+        }
+    }
 
+    async _openSession(deviceSerie, user, ttlMs = 150000) {
+        const expiresAt = new Date(Date.now() + ttlMs);
+        try {
+            await dbConfig.execute(
+                `INSERT INTO loan_sessions (device_serie, hab_id, hab_name, cards_number, expires_at)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE
+                    hab_id = VALUES(hab_id),
+                    hab_name = VALUES(hab_name),
+                    cards_number = VALUES(cards_number),
+                    started_at = CURRENT_TIMESTAMP,
+                    expires_at = VALUES(expires_at)`,
+                [deviceSerie, user.hab_id, user.hab_name, user.cards_number, expiresAt]
+            );
+            return true;
+        } catch (err) {
+            if (err && err.code === 'ER_NO_SUCH_TABLE') {
+                console.warn('⚠️ Sesión no persistida: aplica migración 002 (loan_sessions).');
+                return false;
+            }
+            throw err;
+        }
+    }
+
+    async _closeSession(deviceSerie) {
+        try {
+            await dbConfig.execute(
+                'DELETE FROM loan_sessions WHERE device_serie = ?',
+                [deviceSerie]
+            );
+        } catch (err) {
+            if (err && err.code !== 'ER_NO_SUCH_TABLE') throw err;
+        }
+    }
 
     /**
-     * Envía comandos MQTT al dispositivo (replicando main_usuariosLV2.cpp)
-     * @param {string} deviceSerie - Serie del dispositivo
-     * @param {string} userName - Nombre del usuario (puede ser null si no se encontró)
-     * @param {string} command - Comando específico a enviar ('found', 'nofound', 'unload', 'prestado', 'devuelto')
-     * @returns {Object} - Resultado del envío MQTT
+     * Devuelve la sesión activa más reciente para emparejar el lector
+     * USUARIO con el lector HERRAMIENTA (cuando una estación tiene un solo
+     * par, la sesión es global de facto).
      */
-    async enviarComandosMQTT(deviceSerie, userName, command) {
+    async _latestActiveSession() {
         try {
-            if (!this.mqttClient || !this.mqttClient.connected) {
-                console.warn('⚠️ MQTT no conectado, solo se registrará en base de datos');
+            const rows = await dbConfig.execute(
+                `SELECT * FROM loan_sessions
+                 WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP
+                 ORDER BY started_at DESC LIMIT 1`
+            );
+            return rows.length ? rows[0] : null;
+        } catch (err) {
+            if (err && err.code === 'ER_NO_SUCH_TABLE') return null;
+            throw err;
+        }
+    }
+
+    /**
+     * API back-compat con el viejo getSessionState() en RAM.
+     */
+    async getSessionState(deviceSerie) {
+        const session = deviceSerie
+            ? await this._loadSession(deviceSerie)
+            : await this._latestActiveSession();
+
+        if (!session) {
+            return { active: false, user: null, count: 0 };
+        }
+        return {
+            active: true,
+            user: session.hab_name,
+            count: 1,
+            device_serie: session.device_serie,
+            cards_number: session.cards_number,
+            hab_id: session.hab_id,
+        };
+    }
+
+    // ---------------------------------------------------------------
+    // Lógica de préstamo
+    // ---------------------------------------------------------------
+
+    /**
+     * Consulta de usuario en lector USUARIO. Toggle: si hay sesión
+     * abierta para ese device → cierra. Si no → abre.
+     */
+    async handleLoanUserQuery(deviceSerie, userRFID) {
+        try {
+            const user = await this.getUserByRFID(userRFID);
+
+            if (!user) {
+                await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
+                return { success: false, message: 'Usuario no encontrado', data: { rfid: userRFID } };
+            }
+
+            const session = await this._loadSession(deviceSerie);
+
+            if (session) {
+                // Cerrar sesión
+                await this._closeSession(deviceSerie);
+                await this.enviarComandosMQTT(deviceSerie, null, 'unload');
                 return {
-                    success: false,
-                    message: 'MQTT no conectado'
+                    success: true,
+                    message: 'Sesión finalizada',
+                    data: { usuario: user.hab_name, rfid: userRFID, estado: 'sesión finalizada' },
                 };
             }
 
-            // Enviar nombre del usuario solo si existe (equivalente a user_name en main_usuariosLV2.cpp)
-            if (userName) {
-                this.mqttClient.publish(`${deviceSerie}/user_name`, userName);
-                console.log(`📤 Mensaje publicado en ${deviceSerie}/user_name: ${userName}`);
-            }
-            
-            // Enviar comando de control (equivalente a command en main_usuariosLV2.cpp)
-            this.mqttClient.publish(`${deviceSerie}/command`, command);
-            console.log(`📤 Mensaje publicado en ${deviceSerie}/command: ${command}`);
-            
-            console.log(`✅ Comandos MQTT enviados a ${deviceSerie}: user_name=${userName || 'N/A'}, command=${command}`);
-            
+            // Abrir sesión nueva
+            await this._openSession(deviceSerie, user);
+            await this.enviarComandosMQTT(deviceSerie, user.hab_name, 'found');
             return {
                 success: true,
-                topic: `${deviceSerie}/command`,
-                message: command
+                message: 'Usuario autenticado para préstamo',
+                data: { usuario: user.hab_name, rfid: userRFID, estado: 'autenticado' },
             };
-        } catch (error) {
-            console.error('❌ Error enviando comandos MQTT:', error);
-            return {
-                success: false,
-                message: 'Error enviando comandos MQTT',
-                error: error.message
-            };
+        } catch (err) {
+            console.error('❌ Error handleLoanUserQuery:', err);
+            return { success: false, message: 'Error interno', error: err.message };
         }
     }
 
     /**
-     * Maneja consulta de usuario para préstamos (replicando handleLoanUserQuery de main_usuariosLV2.cpp)
-     * Ahora usa la instancia del servidor IoT de Node.js para mantener sincronización
-     * @param {string} deviceSerie - Serie del dispositivo
-     * @param {string} userRFID - RFID del usuario
-     * @returns {Object} - Resultado del procesamiento
-     */
-    async handleLoanUserQuery(deviceSerie, userRFID) {
-         try {
-             console.log(`🔍 Manejando consulta de usuario para préstamo: ${deviceSerie} - RFID: ${userRFID}`);
-             
-             // ✅ USAR SOLO LÓGICA LOCAL - No usar servidor IoT Node.js para evitar inicio automático de sesiones
-             console.log('🔧 Usando lógica local para evitar inicio automático de sesiones');
-             
-             const user = await this.getUserByRFID(userRFID);
-             
-             if (user) {
-                 if (this.countLoanCard === 1) {
-                     // Usuario ya logueado, cerrar sesión
-                     await this.enviarComandosMQTT(deviceSerie, null, 'unload');
-                     this.countLoanCard = 0;
-                     this.serialLoanUser = null;
-                     console.log('🔄 Sesión de préstamo finalizada');
-                     
-                     return {
-                         success: true,
-                         message: 'Sesión finalizada',
-                         data: {
-                             usuario: user.hab_name,
-                             rfid: userRFID,
-                             estado: 'sesión finalizada'
-                         }
-                     };
-                 } else {
-                     // Nuevo login de usuario - el servidor IoT enviará 'found'
-                     this.serialLoanUser = [user];
-                     this.countLoanCard = 1;
-                     console.log(`✅ Usuario encontrado para préstamo: ${user.hab_name}`);
-                     await this.enviarComandosMQTT(deviceSerie, user.hab_name, 'found');
-                     console.log(`🔍 Usuario almacenado en sesión:`, {
-                         hab_name: user.hab_name,
-                         cards_number: user.cards_number,
-                         hab_id: user.hab_id
-                     });
-                     
-                     return {
-                         success: true,
-                         message: 'Usuario autenticado para préstamo',
-                         data: {
-                             usuario: user.hab_name,
-                             rfid: userRFID,
-                             estado: 'autenticado'
-                         }
-                     };
-                 }
-             } else {
-                 // El servidor IoT legacy ya no existe; este servicio debe publicar 'nofound'
-                 // para que el ESP32 salga del estado "ENVIANDO AL SERVER" y muestre el error.
-                 await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
-                 console.log('❌ Usuario no encontrado para préstamo');
-
-                 return {
-                     success: false,
-                     message: 'Usuario no encontrado',
-                     data: { rfid: userRFID }
-                 };
-             }
-         } catch (error) {
-             console.error('❌ Error en consulta de usuario para préstamo:', error);
-             return {
-                 success: false,
-                 message: 'Error interno del servidor',
-                 error: error.message
-             };
-         }
-     }
-
-    /**
-     * Maneja consulta de equipo para préstamos (replicando handleLoanEquipmentQuery de main_usuariosLV2.cpp)
-     * @param {string} deviceSerie - Serie del dispositivo
-     * @param {string} equipRFID - RFID del equipo
-     * @returns {Object} - Resultado del procesamiento
+     * Consulta de equipo en lector HERRAMIENTA. Requiere sesión activa
+     * (en la única estación instalada hoy buscamos la sesión más reciente).
      */
     async handleLoanEquipmentQuery(deviceSerie, equipRFID) {
         try {
-            console.log(`🔍 [Loan Equipment Query] Dispositivo: ${deviceSerie}, RFID Equipo: ${equipRFID}`);
-            console.log(`📊 Estado actual: countLoanCard=${this.countLoanCard}, serialLoanUser:`, this.serialLoanUser);
-            
-            if (this.countLoanCard === 0 || this.serialLoanUser === null) {
+            const session = await this._latestActiveSession();
+            if (!session) {
                 await this.enviarComandosMQTT(deviceSerie, null, 'nologin');
-                console.log('⚠️ No hay usuario logueado para préstamo');
-                
-                return {
-                    success: false,
-                    message: 'No hay usuario logueado',
-                    action: 'no_login'
-                };
+                return { success: false, message: 'No hay usuario logueado', action: 'no_login' };
             }
 
             const equipment = await this.getEquipmentByRFID(equipRFID);
-            
-            if (equipment) {
-                await this.enviarComandosMQTT(deviceSerie, equipment.equipments_name, null);
-                
-                // Obtener último préstamo del equipo
-                const lastLoan = await this.getLastLoan(equipment.equipments_rfid);
-                
-                let newLoanState = 1; // Por defecto: prestado
-                
-                if (lastLoan) {
-                    newLoanState = lastLoan.loans_state === 1 ? 0 : 1;
-                }
-                
-                // Registrar nuevo préstamo
-                // Validar que el usuario tenga RFID antes de registrar
-                console.log(`🔍 Validando RFID del usuario en sesión:`, this.serialLoanUser[0]);
-                const userRFID = this.serialLoanUser[0].cards_number;
-                if (!userRFID) {
-                    console.error('❌ Error: Usuario no tiene RFID asignado');
-                    console.log('📊 Datos del usuario en sesión:', this.serialLoanUser[0]);
-                    return {
-                        success: false,
-                        message: 'Usuario no tiene RFID asignado',
-                        action: 'no_rfid'
-                    };
-                }
-                
-                const loanRegistered = await this.registrarPrestamo(
-                    userRFID,
-                    equipment.equipments_rfid,
-                    newLoanState
-                );
-                
-                if (loanRegistered) {
-                    const command = newLoanState === 1 ? 'prestado' : 'devuelto';
-                    await this.enviarComandosMQTT(deviceSerie, null, command);
-                    
-                    console.log(`✅ Equipo ${command}: ${equipment.equipments_name}`);
-                    
-                    return {
-                        success: true,
-                        message: `Equipo ${command} exitosamente`,
-                        action: command,
-                        equipment: equipment.equipments_name,
-                        user: this.serialLoanUser[0].hab_name,
-                        state: newLoanState
-                    };
-                } else {
-                    return {
-                        success: false,
-                        message: 'Error registrando préstamo',
-                        action: 'database_error'
-                    };
-                }
-            } else {
+            if (!equipment) {
                 await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
-                console.log('❌ Equipo no encontrado');
-                
-                return {
-                    success: false,
-                    message: 'Equipo no encontrado',
-                    action: 'equipment_not_found'
-                };
+                return { success: false, message: 'Equipo no encontrado', action: 'equipment_not_found' };
             }
-        } catch (error) {
-            console.error('❌ Error en consulta de equipo para préstamo:', error);
+
+            await this.enviarComandosMQTT(deviceSerie, equipment.equipments_name, null);
+
+            const lastLoan = await this.getLastLoan(equipment.equipments_rfid);
+            let newLoanState = 1;
+            if (lastLoan) {
+                newLoanState = lastLoan.loans_state === 1 ? 0 : 1;
+            }
+
+            const userRFID = session.cards_number;
+            if (!userRFID) {
+                console.error('❌ Usuario en sesión sin RFID asignado:', session);
+                return { success: false, message: 'Usuario sin RFID', action: 'no_rfid' };
+            }
+
+            const ok = await this.registrarPrestamo(userRFID, equipment.equipments_rfid, newLoanState);
+            if (!ok) {
+                return { success: false, message: 'Error registrando préstamo', action: 'database_error' };
+            }
+
+            const command = newLoanState === 1 ? 'prestado' : 'devuelto';
+            await this.enviarComandosMQTT(deviceSerie, null, command);
+
             return {
-                success: false,
-                message: 'Error interno del servidor',
-                error: error.message
+                success: true,
+                message: `Equipo ${command} exitosamente`,
+                action: command,
+                equipment: equipment.equipments_name,
+                user: session.hab_name,
+                state: newLoanState,
             };
+        } catch (err) {
+            console.error('❌ Error handleLoanEquipmentQuery:', err);
+            return { success: false, message: 'Error interno', error: err.message };
         }
     }
 
     /**
-     * Procesa una consulta RFID desde el hardware físico
-     * Replica exactamente la funcionalidad del dispositivo main_usuariosLV2.cpp
-     * @param {string} deviceSerie - Serie del dispositivo que envía la consulta
-     * @param {string} rfidNumber - Número RFID de la tarjeta
-     * @returns {Object} - Resultado del procesamiento
-     */
-    async procesarConsultaRFID(deviceSerie, rfidNumber) {
-        try {
-            console.log(`🔄 Procesando consulta RFID desde hardware: ${deviceSerie} - RFID: ${rfidNumber}`);
-            
-            // Obtener información del usuario por RFID usando la vista cards_habs
-            const usuario = await this.getUserByRFID(rfidNumber);
-            if (!usuario) {
-                console.log(`❌ Usuario no encontrado para RFID: ${rfidNumber}`);
-                // El servidor IoT enviará 'nofound' automáticamente
-                return {
-                    success: false,
-                    message: 'Usuario no encontrado para RFID',
-                    data: { rfid: rfidNumber }
-                };
-            }
-            
-            // Procesar como consulta de usuario para préstamos
-            return await this.handleLoanUserQuery(deviceSerie, rfidNumber);
-            
-        } catch (error) {
-            console.error('❌ Error procesando consulta RFID:', error);
-            return {
-                success: false,
-                message: 'Error interno del servidor',
-                data: { rfid: rfidNumber }
-            };
-        }
-    }
-
-    /**
-     * Procesa una solicitud de préstamo desde la app Flutter
-     * @param {string} registration - Matrícula del usuario
-     * @param {string} deviceSerie - Serie del dispositivo
-     * @param {string} action - Acción a realizar (on/off)
-     * @returns {Object} - Resultado del procesamiento
+     * Login/logout de préstamo desde la app Flutter (en lugar de pasar
+     * tarjeta física). El device_serie es el del lector USUARIO físico.
      */
     async procesarPrestamo(registration, deviceSerie, action) {
         try {
-            console.log(`🔄 Procesando préstamo desde app: ${registration} - ${deviceSerie} - ${action}`);
-            console.log(`📊 Estado actual de sesión: countLoanCard=${this.countLoanCard}, usuario=${this.serialLoanUser ? this.serialLoanUser[0].hab_name : 'ninguno'}`);
-            
-            // Obtener información del usuario por matrícula
             const usuario = await this.getUserByRegistration(registration);
             if (!usuario) {
-                console.log(`❌ Usuario no encontrado: ${registration}`);
-                // El servidor IoT enviará 'nofound' automáticamente cuando procese el RFID
-                return {
-                    success: false,
-                    message: 'Usuario no encontrado',
-                    data: null
-                };
-            }
-            
-            // Obtener información del dispositivo
-            const dispositivo = await this.getDeviceBySerie(deviceSerie);
-            if (!dispositivo) {
-                console.log(`❌ Dispositivo no encontrado: ${deviceSerie}`);
-                return {
-                    success: false,
-                    message: 'Dispositivo no encontrado',
-                    data: null
-                };
-            }
-            
-            // ✅ FUNCIONALIDAD MEJORADA: Obtener RFID del usuario directamente del objeto usuario
-            const userRFID = usuario.cards_number;
-            console.log(`🔍 RFID del usuario logueado: ${userRFID}`);
-            
-            // Validar que el usuario tenga RFID asignado
-            if (!userRFID) {
-                console.error('❌ Error: Usuario no tiene RFID asignado');
-                console.log('📊 Datos del usuario:', {
-                    hab_id: usuario.hab_id,
-                    hab_date: usuario.hab_date,
-                    hab_name: usuario.hab_name,
-                    hab_registration: usuario.hab_registration,
-                    hab_email: usuario.hab_email,
-                    hab_card_id: usuario.hab_card_id,
-                    hab_device_id: usuario.hab_device_id
-                });
-                return {
-                    success: false,
-                    message: 'Usuario no tiene RFID asignado',
-                    data: null
-                };
-            }
-            
-            // ✅ RESTAURADO: Publicar RFID al tópico loan_queryu con prefijo para evitar bucle infinito
-            // Usar prefijo "APP:" para distinguir publicaciones desde la app vs. hardware
-            if (userRFID && this.mqttClient && this.mqttClient.connected) {
-                try {
-                    const topic = `${deviceSerie}/loan_queryu`;
-                    const messageWithPrefix = `APP:${userRFID}`;
-                    this.mqttClient.publish(topic, messageWithPrefix);
-                    console.log(`📤 RFID publicado en ${topic}: ${messageWithPrefix} (desde app, no procesará automáticamente)`);
-                } catch (error) {
-                    console.error('❌ Error publicando RFID en loan_queryu:', error);
-                }
+                return { success: false, message: 'Usuario no encontrado', data: null };
             }
 
+            const dispositivo = await this.getDeviceBySerie(deviceSerie);
+            if (!dispositivo) {
+                return { success: false, message: 'Dispositivo no encontrado', data: null };
+            }
+
+            const userRFID = usuario.cards_number;
+            if (!userRFID) {
+                return { success: false, message: 'Usuario sin RFID asignado', data: null };
+            }
+
+            const userForSession = {
+                hab_id: usuario.hab_id,
+                hab_name: usuario.hab_name,
+                cards_number: userRFID,
+            };
+
             if (action === 'on') {
-                // Acción de login/autenticación de usuario
-                // Enviar comandos MQTT directamente desde aquí para evitar duplicación
-                
-                this.serialLoanUser = [usuario];
-                this.countLoanCard = 1;
-                
-                console.log(`🔍 Usuario almacenado en sesión para préstamos:`, {
-                    hab_name: usuario.hab_name,
-                    cards_number: usuario.cards_number,
-                    hab_id: usuario.hab_id
-                });
-                
-                // Enviar comandos MQTT directamente
+                await this._openSession(deviceSerie, userForSession);
                 await this.enviarComandosMQTT(deviceSerie, usuario.hab_name, 'found');
-                
-                console.log(`✅ Usuario encontrado para préstamo: ${usuario.hab_name} - Sesión ACTIVA`);
-                
                 return {
                     success: true,
                     message: 'Usuario autenticado para préstamo',
@@ -673,256 +363,87 @@ class PrestamoService {
                         usuario: usuario.hab_name,
                         dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
                         estado: 'active',
-                        rfid_published: userRFID
-                    }
+                    },
                 };
-            } else {
-                // Acción de logout/finalizar sesión
-                // Enviar comando unload directamente desde aquí
-                if (this.countLoanCard === 1) {
-                    this.countLoanCard = 0;
-                    this.serialLoanUser = null;
-                    
-                    // Enviar comando unload directamente
-                    await this.enviarComandosMQTT(deviceSerie, null, 'unload');
-                    console.log('🔄 Sesión de préstamo reiniciada');
-                    
-                    return {
-                        success: true,
-                        message: 'Sesión finalizada exitosamente',
-                        data: {
-                            usuario: usuario.hab_name,
-                            dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
-                            estado: 'sesión finalizada',
-                            rfid_published: userRFID
-                        }
-                    };
-                } else {
-                    console.log(`⚠️ Intento de finalizar sesión sin sesión activa para usuario: ${usuario.hab_name}`);
-                    
-                    return {
-                        success: true,
-                        message: 'No había sesión activa, operación completada',
-                        data: {
-                            usuario: usuario.hab_name,
-                            dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
-                            estado: 'sin sesión activa',
-                            rfid_published: userRFID
-                        }
-                    };
-                }
             }
-            
-        } catch (error) {
-            console.error('❌ Error procesando préstamo desde app:', error);
-            return {
-                success: false,
-                message: 'Error interno del servidor',
-                data: null
-            };
-        }
-    }
 
-    // ELIMINADO - Función procesarConsultaRFID removida junto con el listener MQTT
-
-    /**
-     * Simula el dispositivo físico RFID: busca usuario por matrícula y obtiene su RFID automáticamente
-     * Replica exactamente el comportamiento del hardware main_usuariosLV2.cpp
-     * Ahora usa la instancia del servidor IoT de Node.js para mantener sincronización
-     * @param {string} registration - Matrícula del usuario (ej: L03533767)
-     * @param {string} deviceSerie - Serie del dispositivo
-     * @returns {Object} - Resultado del procesamiento
-     */
-    async simularDispositivoFisico(registration, deviceSerie) {
-        try {
-            console.log(`🤖 Simulando dispositivo físico: buscando usuario ${registration} en dispositivo ${deviceSerie}`);
-            
-            // 1. Buscar usuario por matrícula en la base de datos
-            const usuario = await this.getUserByRegistration(registration);
-            if (!usuario) {
-                console.log(`❌ Usuario no encontrado por matrícula: ${registration}`);
-                // El servidor IoT enviará 'nofound' automáticamente cuando procese el RFID
-                return {
-                    success: false,
-                    message: 'Usuario no encontrado',
-                    data: { 
-                        matricula: registration,
-                        estado: 'no encontrado'
-                    }
-                };
-            }
-            
-            // 2. Obtener el RFID del usuario desde la vista cards_habs
-            let connection = null;
-            let userRFID = null;
-            try {
-                const mysql = require('mysql2/promise');
-                connection = await mysql.createConnection({
-                    host: process.env.DB_HOST,
-                    user: process.env.DB_USER,
-                    password: process.env.DB_PASSWORD,
-                    database: process.env.DB_NAME,
-                    port: process.env.DB_PORT
-                });
-                
-                const [rows] = await connection.execute(
-                    `SELECT ch.cards_number, ch.hab_name 
-                     FROM cards_habs ch 
-                     INNER JOIN habintants h ON ch.hab_id = h.hab_id 
-                     WHERE h.hab_registration = ?`,
-                    [registration]
-                );
-                
-                if (rows.length === 0) {
-                    console.log(`❌ No se encontró tarjeta RFID para la matrícula: ${registration}`);
-                    // El servidor IoT enviará 'nofound' automáticamente cuando no encuentre el RFID
-                    return {
-                        success: false,
-                        message: 'Usuario no tiene tarjeta RFID asignada',
-                        data: { 
-                            matricula: registration,
-                            usuario: usuario.hab_name,
-                            estado: 'sin tarjeta RFID'
-                        }
-                    };
-                }
-                
-                userRFID = rows[0].cards_number;
-                console.log(`✅ RFID encontrado para ${registration}: ${userRFID}`);
-                
-            } finally {
-                if (connection) {
-                    await connection.end();
-                }
-            }
-            
-            // 3. Verificar que el dispositivo existe
-            const dispositivo = await this.getDeviceBySerie(deviceSerie);
-            if (!dispositivo) {
-                console.log(`❌ Dispositivo no encontrado: ${deviceSerie}`);
-                return {
-                    success: false,
-                    message: 'Dispositivo no encontrado',
-                    data: { 
-                        matricula: registration,
-                        deviceSerie: deviceSerie
-                    }
-                };
-            }
-            
-            // 4. Simular el comportamiento exacto del hardware físico
-            console.log(`🔄 Simulando lectura RFID del dispositivo físico: ${userRFID}`);
-            
-            // Simular exactamente lo que hace el hardware cuando send_access_query == true
-            // Publicar directamente en el tópico loan_queryu como lo hace el ESP32
-            const topic = `${deviceSerie}/loan_queryu`;
-            console.log(`📡 Publicando en MQTT como dispositivo físico: ${topic} -> ${userRFID}`);
-            
-            if (this.mqttClient && this.mqttClient.connected) {
-                // Publicar el RFID en el tópico loan_queryu (exactamente como el hardware)
-                this.mqttClient.publish(topic, userRFID, (err) => {
-                    if (err) {
-                        console.error('❌ Error publicando en MQTT:', err);
-                    } else {
-                        console.log(`✅ RFID publicado exitosamente en ${topic}: ${userRFID}`);
-                    }
-                });
-                
-                // Esperar un momento para que el backend de Node.js procese la consulta
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
+            // logout
+            const session = await this._loadSession(deviceSerie);
+            if (session) {
+                await this._closeSession(deviceSerie);
+                await this.enviarComandosMQTT(deviceSerie, null, 'unload');
                 return {
                     success: true,
-                    message: 'Simulación de dispositivo físico completada - RFID enviado por MQTT',
+                    message: 'Sesión finalizada exitosamente',
                     data: {
-                        matricula: registration,
                         usuario: usuario.hab_name,
-                        rfid: userRFID,
                         dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
-                        estado: 'RFID enviado por MQTT',
-                        device_serie: deviceSerie,
-                        topic: topic,
-                        timestamp: new Date().toISOString(),
-                        simulation: true,
-                        hardware_behavior: true
-                    }
+                        estado: 'sesión finalizada',
+                    },
                 };
-            } else {
-                console.log('⚠️ Cliente MQTT no conectado, usando lógica de fallback');
-                
-                // Fallback: usar lógica local si MQTT no está disponible
-                if (this.countLoanCard === 1) {
-                    // Ya hay una sesión activa, cerrarla
-                    await this.enviarComandosMQTT(deviceSerie, null, 'unload');
-                    this.countLoanCard = 0;
-                    this.serialLoanUser = null;
-                    console.log('🔄 Sesión de préstamo finalizada por dispositivo físico simulado');
-                    
-                    return {
-                        success: true,
-                        message: 'Sesión finalizada por dispositivo físico (fallback)',
-                        data: {
-                            matricula: registration,
-                            usuario: usuario.hab_name,
-                            rfid: userRFID,
-                            dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
-                            estado: 'sesión finalizada',
-                            device_serie: deviceSerie,
-                            timestamp: new Date().toISOString(),
-                            simulation: true
-                        }
-                    };
-                } else {
-                    // No hay sesión activa, iniciar nueva sesión
-                    await this.enviarComandosMQTT(deviceSerie, usuario.hab_name, 'found');
-                    this.serialLoanUser = [usuario];
-                    this.countLoanCard = 1;
-                    
-                    // Registrar el tráfico
-                    await this.registrarTrafico(usuario.hab_id, deviceSerie, 1);
-                    
-                    console.log(`✅ Sesión iniciada por dispositivo físico simulado: ${usuario.hab_name}`);
-                    
-                    return {
-                        success: true,
-                        message: 'Sesión iniciada por dispositivo físico (fallback)',
-                        data: {
-                            matricula: registration,
-                            usuario: usuario.hab_name,
-                            rfid: userRFID,
-                            dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
-                            estado: 'sesión iniciada',
-                            device_serie: deviceSerie,
-                            timestamp: new Date().toISOString(),
-                            simulation: true
-                        }
-                    };
-                }
             }
-            
-        } catch (error) {
-            console.error('❌ Error simulando dispositivo físico:', error);
+
             return {
-                success: false,
-                message: 'Error interno del servidor',
+                success: true,
+                message: 'No había sesión activa, operación completada',
                 data: {
-                    matricula: registration,
-                    error: error.message
-                }
+                    usuario: usuario.hab_name,
+                    dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
+                    estado: 'sin sesión activa',
+                },
             };
+        } catch (err) {
+            console.error('❌ Error procesarPrestamo:', err);
+            return { success: false, message: 'Error interno', data: null };
         }
     }
 
     /**
-     * Obtiene el estado actual de la sesión de préstamo
-     * @returns {Object} - Estado de la sesión
+     * Compatibilidad con el endpoint legacy: simula el dispositivo físico
+     * publicando el RFID al broker para que el listener procese el flujo
+     * normal. Hoy es equivalente a procesarPrestamo en modo toggle.
      */
-    getSessionState() {
+    async simularDispositivoFisico(registration, deviceSerie) {
+        const usuario = await this.getUserByRegistration(registration);
+        if (!usuario) {
+            return { success: false, message: 'Usuario no encontrado',
+                data: { matricula: registration, estado: 'no encontrado' } };
+        }
+
+        const userRFID = usuario.cards_number;
+        if (!userRFID) {
+            return { success: false, message: 'Usuario sin tarjeta RFID',
+                data: { matricula: registration, usuario: usuario.hab_name, estado: 'sin tarjeta RFID' } };
+        }
+
+        const dispositivo = await this.getDeviceBySerie(deviceSerie);
+        if (!dispositivo) {
+            return { success: false, message: 'Dispositivo no encontrado',
+                data: { matricula: registration, deviceSerie } };
+        }
+
+        // Reutiliza la lógica unificada de toggle.
+        const result = await this.handleLoanUserQuery(deviceSerie, userRFID);
         return {
-            active: this.countLoanCard === 1,
-            user: this.serialLoanUser ? this.serialLoanUser[0].hab_name : null,
-            count: this.countLoanCard
+            ...result,
+            data: {
+                ...(result.data || {}),
+                matricula: registration,
+                usuario: usuario.hab_name,
+                rfid: userRFID,
+                dispositivo: dispositivo.devices_alias || dispositivo.devices_name,
+                device_serie: deviceSerie,
+                timestamp: new Date().toISOString(),
+                simulation: true,
+            },
         };
+    }
+
+    /**
+     * Versión simplificada del endpoint legacy.
+     */
+    async procesarConsultaRFID(deviceSerie, rfidNumber) {
+        return this.handleLoanUserQuery(deviceSerie, rfidNumber);
     }
 }
 

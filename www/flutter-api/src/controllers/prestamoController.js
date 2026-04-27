@@ -234,7 +234,7 @@ class PrestamoController {
      */
     async obtenerEstadoSesion(req, res) {
         try {
-            const estadoSesion = prestamoService.getSessionState();
+            const estadoSesion = await prestamoService.getSessionState();
             
             res.status(200).json({
                 success: true,

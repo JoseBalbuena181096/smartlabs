@@ -283,11 +283,11 @@ class SmartLabsFlutterAPI {
         this.app.use('/api/prestamo', optionalAuth, prestamoRoutes);
         
         // Rutas MQTT para control del listener de hardware
-        this.app.get('/api/mqtt/status', optionalAuth, (req, res) => {
+        this.app.get('/api/mqtt/status', optionalAuth, async (req, res) => {
             try {
                 const isActive = mqttListenerService.isActive();
-                const sessionState = mqttListenerService.getSessionState();
-                
+                const sessionState = await mqttListenerService.getSessionState();
+
                 res.json({
                     success: true,
                     data: {
