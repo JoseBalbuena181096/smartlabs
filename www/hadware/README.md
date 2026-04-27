@@ -110,25 +110,45 @@ siguen matcheando sin migración.
    mismo sketch — soporta ambos tipos de tag, reemplaza al antiguo sin cambios
    en BD.
 
-## 4. Bugs conocidos pendientes en los `esp32_*.cpp`
+## 4. Antes de flashear: crear `secrets.h`
 
-Estos NO se han tocado todavía — listados para el siguiente refactor:
+Las credenciales WiFi/MQTT ya **no están** en los `.cpp`. Hay que crear un
+`secrets.h` local (gitignored) en este mismo directorio:
 
-| Severidad | Archivo(s) | Problema |
-|---|---|---|
-| Crítico  | TODOS  | Credenciales WiFi/MQTT hardcoded (`dlink/angelsnek2510`, `jose/public`). Mover a `secrets.h` git-ignored o NVS. |
-| Crítico  | TODOS  | `String rfid` acumulado en RTOS task → fragmentación de heap, probable causa raíz de los watchdog crashes. Reemplazar por `char buf[24]` + índice. |
-| Alto     | TODOS  | Race condition entre core 0 (`codeForTask1`) y core 1 (`loop`) sobre `rfid` y `send_access_query`. Sin `portMUX` ni queue. |
-| Alto     | TODOS  | `while (WiFi.status() != WL_CONNECTED) delay(500)` cuelga indefinido si AP cae. Falta timeout + reset. |
-| Alto     | usuarios | Mismo `serial_number = SMART10003` en `esp32_prestamo_lector_USUARIO.cpp` y `_DEPRECATED_esp32_prestamo_usuario_v1.cpp`. Solo flashear el activo. |
-| Medio    | TODOS  | Falta MQTT Last Will (`{SN}/status` con `offline` retained) para que el backend sepa cuándo el equipo se cae. |
-| Medio    | TODOS  | `temprature_sens_read()` está deprecated en IDF nuevo y el backend no consume `{SN}/temp` — eliminar o reemplazar por NTC externo. |
-| Bajo     | TODOS  | Texto OLED `setTextSize(2)` con strings de 30 chars no cabe en 128 px. Y `TARGETA` → `TARJETA`. |
-| Bajo     | TODOS  | `BUILTIN_LED` en ESP32 DevKit es GPIO2 (strapping pin) — confirmar que no haya conflicto al arrancar. |
+```bash
+cp secrets.h.example secrets.h
+# editar secrets.h con tus valores reales
+```
 
-## 5. Siguiente paso sugerido
+Si compilas con Arduino IDE: el `secrets.h` debe estar en la misma carpeta del
+`.ino` que abras (Arduino agrupa todos los `.h`/`.cpp` adjuntos al sketch).
 
-Refactorizar a **un solo firmware con PlatformIO** y `build_flags` por modo:
+## 5. Mejoras aplicadas a los `esp32_*.cpp`
+
+Los cuatro archivos activos fueron reescritos preservando 100 % el contrato
+MQTT (mismos topics, mismos comandos, mismo formato de payload). Cambios:
+
+| Mejora | Estado |
+|---|---|
+| Credenciales WiFi/MQTT en `secrets.h` git-ignored | ✅ aplicado |
+| `char[]` en lugar de `Arduino String` para el UID en RTOS task (causa raíz de heap fragmentation y watchdog crashes) | ✅ aplicado |
+| `QueueHandle_t` para pasar UIDs entre core 0 (UART) y core 1 (MQTT) en lugar de variables compartidas | ✅ aplicado |
+| `WiFi.begin` con timeout 30 s y `ESP.restart()` si el AP cae | ✅ aplicado |
+| MQTT Last Will: `{SN}/status` retained `offline` cuando muere, `online` al conectar | ✅ aplicado |
+| Reconexión MQTT no bloqueante (sin while-loop) | ✅ aplicado |
+| `temprature_sens_read()` y publish de `{SN}/temp` eliminados (deprecated, backend no los consume) | ✅ aplicado |
+| OLED `TARGETA` → `TARJETA`, mensajes adaptados al ancho de 128 px | ✅ aplicado |
+
+## 6. Pendientes (siguiente bloque de trabajo)
+
+| Severidad | Tarea |
+|---|---|
+| Medio    | OTA (Over-The-Air updates) con `ArduinoOTA` o `ESPhttpUpdate` para no flashear por USB cada vez. |
+| Medio    | Persistir `secrets.h` en NVS / Preferences con un portal de configuración WiFi en primer arranque (WiFiManager). |
+| Bajo     | Confirmar que `BUILTIN_LED` (GPIO2 en ESP32 DevKit) no entre en conflicto con strapping al arrancar. |
+| Bajo     | Refactor a un solo firmware con PlatformIO + `build_flags` por modo (4 envs) para eliminar la duplicación restante entre los 4 archivos. |
+
+### Esquema PlatformIO sugerido (cuando se haga)
 
 ```
 src/main.cpp                 # genérico (lee MODE_* de build_flags)
@@ -136,9 +156,10 @@ src/modes/becarios.cpp       # solo handler de comandos + textos OLED
 src/modes/maquinas.cpp
 src/modes/herramienta.cpp
 src/modes/usuario.cpp
-include/secrets.h            # gitignored, con WIFI_SSID, MQTT_PASS, etc.
+include/secrets.h            # gitignored
 platformio.ini               # 4 envs: becarios / maquinas / herramienta / usuario
 ```
 
-Esto reduce ~5 × 400 líneas duplicadas a ~1 archivo + 4 archivos de ~80 líneas.
-Cualquier fix de seguridad/red se aplica una sola vez en lugar de cinco.
+Reduciría los ~4 × 350 líneas actuales a ~1 archivo común + 4 archivos de
+~80 líneas. Cualquier fix de seguridad/red aplica una sola vez en lugar de
+cuatro.

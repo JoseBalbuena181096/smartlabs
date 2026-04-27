@@ -7,3 +7,10 @@ flutter-api/node_modules/
 # Archivos de configuración IDE
 .vscode/
 .idea/
+
+# Hardware: credenciales WiFi/MQTT del firmware (cada estación tiene su copia local)
+hadware/secrets.h
+hadware/.pio/
+hadware/.pioenvs/
+hadware/.piolibdeps/
+hadware/build/
