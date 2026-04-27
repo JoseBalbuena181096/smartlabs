@@ -423,9 +423,11 @@ class PrestamoService {
                      };
                  }
              } else {
-                 // El servidor IoT enviará 'nofound' automáticamente
+                 // El servidor IoT legacy ya no existe; este servicio debe publicar 'nofound'
+                 // para que el ESP32 salga del estado "ENVIANDO AL SERVER" y muestre el error.
+                 await this.enviarComandosMQTT(deviceSerie, null, 'nofound');
                  console.log('❌ Usuario no encontrado para préstamo');
-                 
+
                  return {
                      success: false,
                      message: 'Usuario no encontrado',
