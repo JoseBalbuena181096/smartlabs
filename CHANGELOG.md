@@ -86,9 +86,22 @@ Probado end-to-end con `docker compose up`:
 - Con sesión + credencial David (ajena) → `refused`, sesión de Jose intacta ✅
 - Con sesión + credencial Jose (la misma que abrió) → `unload`, sesión cerrada ✅
 
+## 2026-04-27 (post-2)
+
+### HW-PIO · proyecto PlatformIO unificado + HW-OTA + HW-BUILTIN
+
+| Commit | Cambios |
+|---|---|
+| (siguiente) | **`www/hadware/` reorganizado en `arduino/` + `esp32/`.** El `.ino` del lector RC522 vive en `arduino/lector_universal/`. El firmware ESP32 pasa de 3 archivos `.cpp` independientes (~350 líneas cada uno, ~80 % duplicado) a un proyecto PlatformIO con: <br>• `esp32/platformio.ini` con 3 envs (`becarios`/`maquinas`/`prestamo`). <br>• `esp32/src/main.cpp` único con todo el scaffolding compartido (UART RTOS task, WiFi STA con timeout y `ESP.restart`, MQTT con Last Will retained `{SN}/status`, OLED, ArduinoOTA con hostname `{SN}.local`). <br>• `esp32/src/mode.h` con la interfaz `modeSetup/modeOnUidRead/modeOnCommand/modeOnUserName/modeLoopTick`. <br>• `esp32/src/mode_<x>.cpp` envueltos en `#ifdef MODE_<X>`: solo uno aporta `kMode` y los handlers por env. <br>• `esp32/include/secrets.h.example` plantilla; `secrets.h` gitignored. <br>**HW-OTA**: ArduinoOTA listo en cada estación, descubrible por mDNS como `<SN>.local`. Password opcional via `SECRETS_OTA_PASSWORD`. <br>**HW-BUILTIN**: `PIN_LED` ahora es overridable con `-DPIN_LED=<n>` por env si una placa concreta cuelga al arrancar por strapping de GPIO2. <br>Eliminados los 3 `.cpp` viejos + 4 `_DEPRECATED_*` que ya no aportan (la historia git los conserva). |
+
+### Validación (post-2)
+
+- `pio run -e becarios -e maquinas -e prestamo` debe compilar los tres firmwares sin warnings nuevos. El usuario probará el flasheo en hardware real (USB la primera vez, OTA en adelante).
+- Contrato MQTT no cambió → backend y app no requieren cambios.
+
 ## Pendientes (siguiente bloque, no incluido aquí)
 
-- **HW**: OTA, NVS portal de configuración WiFi, refactor a un solo firmware con PlatformIO + `build_flags`.
+- **HW-NVS**: secrets en NVS/Preferences + WiFiManager (captive portal) en primer arranque.
 - **BE-A**: reconciliar credenciales MQTT entre `.env` raíz (`smartlabs/...`), `flutter-api/.env` (`jose/public`) y `secrets.h` del firmware. Decisión de ops.
 - **BE-C**: lock/transacción explícita en `loan_sessions` para entornos con múltiples instancias del flutter-api (la PK ya da atomicidad, pero un mutex en DB previene escrituras parciales en escenarios de fallo).
 - **BE-G**: reemplazar polling de `traffic` cada 5s en `device-status/server.js` por subscribe MQTT directo o triggers DB.
