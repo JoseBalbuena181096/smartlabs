@@ -99,10 +99,47 @@ Probado end-to-end con `docker compose up`:
 - `pio run -e becarios -e maquinas -e prestamo` debe compilar los tres firmwares sin warnings nuevos. El usuario probará el flasheo en hardware real (USB la primera vez, OTA en adelante).
 - Contrato MQTT no cambió → backend y app no requieren cambios.
 
+## 2026-04-27 (post-3)
+
+### Despliegue real: red IronMakers + BE-A reconciliacion MQTT
+
+| Cambio | Detalle |
+|---|---|
+| `secrets.h` (firmware, gitignored) | Creado con WiFi `IronMakers` / `angelsnek2510`, broker `192.168.0.100:1883`, MQTT user `jose / public`. Coincide con la red WiFi y la IP estatica del servidor segun las capturas del usuario. |
+| `secrets.h.example` | Cambia user MQTT por defecto de `smartlabs/smartlabs_mqtt_2024` a `jose/public` con comentario explicando por que (BE-A). |
+| `www/.env` y `www/.env.example` | `MQTT_USERNAME=jose` / `MQTT_PASSWORD=public` (antes `smartlabs / smartlabs_mqtt_2024`). |
+| `www/flutter-api/.env.example` | `MQTT_USERNAME=jose` (antes `admin`). |
+| `www/docker-compose.yml` | Defaults de `MQTT_USERNAME` / `MQTT_PASSWORD` ahora `jose/public` para web-app y flutter-api. |
+
+**Por que `jose/public`**: la tabla `mqtt_user` en MariaDB (autenticacion EMQX) tiene un solo registro: `jose` con SHA256 del string `public`. Las credenciales `smartlabs/...` que rondaban en `.env` raíz nunca existieron en el broker, asi que el firmware con esos valores habria fallado autenticacion al primer connect. Resolvio BE-A.
+
+**No se cambio en este turno**: las IPs estaticas por estacion (185/123/34) siguen en el rango 192.168.0.0/24 con gateway `.1`, asi que no requieren ajuste.
+
+### Validación end-to-end con hardware real (2026-04-27 noche)
+
+Probado con el ESP32 SMART10003 + Arduino Nano + RC522 reales en la red WiFi `IronMakers`:
+
+- ESP32 conecta a WiFi `IronMakers`, IP estática `192.168.0.34` ✅
+- ArduinoOTA listo en `SMART10003.local` ✅
+- Tras configurar `netsh portproxy 192.168.0.100:1883 → WSL2:1883` desde PowerShell admin, ESP32 conecta al broker EMQX en WSL2 docker ✅
+- LWT publicado: `SMART10003/status` retained `online` ✅
+- Arduino RC522 lee MIFARE Classic 1KB y emite UID por UART → ESP32 publica a `loan_queryu` ✅
+- flutter-api recibe, busca en `cards.cards_number`, responde `nofound` (UID `1913715951` no estaba registrado) ✅
+
+**Limitación detectada**: el RC522 disponible es un clon (versión `0x82`) que no detecta Mifare Ultralight aunque el celular sí. Se documenta en PENDIENTES como **HW-RC522** con la lista de mitigaciones intentadas y la recomendación de cambiar el módulo por uno con chip NXP auténtico.
+
+### Env PlatformIO para el sketch del lector Arduino
+
+| Cambio | Detalle |
+|---|---|
+| `www/hadware/arduino/lector_universal/platformio.ini` | Nuevo. 3 envs (`nano_old`, `nano_new`, `uno`) compartiendo `lib_deps = miguelbalboa/MFRC522`. `src_dir = .` para mantener el `.ino` en el mismo directorio. Permite `pio run -t upload` igual que el ESP32, sin depender de Arduino IDE. |
+| `www/hadware/arduino/README.md` | Sección de comandos PlatformIO añadida. |
+
 ## Pendientes (siguiente bloque, no incluido aquí)
 
+- **HW-RC522**: el RC522 actual no detecta Ultralight (chip clon `0x82`). Cambiar por módulo NXP auténtico.
 - **HW-NVS**: secrets en NVS/Preferences + WiFiManager (captive portal) en primer arranque.
-- **BE-A**: reconciliar credenciales MQTT entre `.env` raíz (`smartlabs/...`), `flutter-api/.env` (`jose/public`) y `secrets.h` del firmware. Decisión de ops.
+- **OPS-WSL**: configurar `[wsl2] networkingMode=mirrored` en `~/.wslconfig` para no depender del port-proxy manual de Windows.
 - **BE-C**: lock/transacción explícita en `loan_sessions` para entornos con múltiples instancias del flutter-api (la PK ya da atomicidad, pero un mutex en DB previene escrituras parciales en escenarios de fallo).
 - **BE-G**: reemplazar polling de `traffic` cada 5s en `device-status/server.js` por subscribe MQTT directo o triggers DB.
 - **PHP-L**: decidir un único entry point (raíz `index.php` vs `public/index.php`) y `.htaccess` que redirija.

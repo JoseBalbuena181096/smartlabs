@@ -23,14 +23,21 @@ Nuevos pendientes de hardware (post HW-PIO):
 
 | ID | Severidad | Pendiente |
 |---|---|---|
+| HW-RC522 | **Alta** | El módulo RC522 actual reporta versión `0x82` (chip clon FM17522 o similar). No detecta tags **Mifare Ultralight** ni con WUPA, antena al máximo, SPI 1 MHz, reset periódico ni antenna cycle (probadas todas el 2026-04-27 sin éxito). Lee perfecto MIFARE Classic 1KB. **Acción**: conseguir un módulo RC522 con chip NXP auténtico (versión `0x91`/`0x92`) — en MercadoLibre busca "RC522 NXP original". Alternativa más cara pero industrial: PN532 (~$120 MXN). Mientras tanto, las herramientas pueden marcarse con tarjetas MIFARE en lugar de stickers Ultralight. |
 | HW-HEAP | Baja | Publicar heap libre periódico a `{SN}/heap` para detectar fugas en producción. |
 | HW-WD   | Baja | Watchdog de aplicación: si pasan N minutos sin loop completo, `ESP.restart`. `PubSubClient` ya cubre el caso de socket muerto pero no el de un mode_*.cpp colgado en `delay()`. |
+
+## 1.b Despliegue en WSL2 (Windows)
+
+| ID | Severidad | Pendiente |
+|---|---|---|
+| OPS-WSL | Media | Si el broker EMQX se levanta en docker dentro de WSL2, los firmwares ESP32 (que viven en otra red WiFi) no llegan a `192.168.0.100:1883` por sí solos — Windows no reenvía ese puerto a WSL2 por defecto. **Workaround aplicado el 2026-04-27**: <br>`netsh interface portproxy add v4tov4 listenaddress=192.168.0.100 listenport=1883 connectaddress=<WSL2_IP> connectport=1883`<br>`netsh advfirewall firewall add rule name="MQTT 1883 in" dir=in action=allow protocol=TCP localport=1883`<br>(ejecutar una vez como Admin). El `<WSL2_IP>` cambia con cada reinicio de WSL si no se usa `[wsl2] networkingMode=mirrored` en `~/.wslconfig`. **Pendiente**: configurar mirrored mode en `~/.wslconfig` para una solución sin port-proxy, o documentar el script de re-arme automático. |
 
 ## 2. Backend Node.js (`www/flutter-api/`)
 
 | ID | Severidad | Pendiente |
 |---|---|---|
-| BE-A | **Crítico** | **Decisión de ops**: reconciliar credenciales MQTT entre `.env` raíz (`smartlabs / smartlabs_mqtt_2024`), `flutter-api/.env` (`jose / public`) y `secrets.h` del firmware. Una sola autentica contra EMQX. |
+| ~~BE-A~~ | ~~**Crítico**~~ | ~~Reconciliar credenciales MQTT entre `.env` raíz, `flutter-api/.env` y `secrets.h`.~~ **HECHO** (2026-04-27): unificado a `jose / public` (la unica cred existente en `mqtt_user` de MariaDB). 7 archivos alineados (firmware secrets.h, ambos `.env`, ambos `.env.example`, `docker-compose.yml`, `flutter-api/.env`). |
 | BE-C | Alta | Lock/transacción explícita en `loan_sessions` para entornos con múltiples instancias del flutter-api detrás de un balanceador. La PK ya da atomicidad para INSERT, pero no para read-then-update. |
 | BE-G | Media | `device-status/server.js` polea la tabla `traffic` cada 5 s con `GROUP BY ... MAX(traffic_date)`. Reemplazar por subscribe MQTT directo o triggers DB. |
 | BE-J | Baja | Limpiar comentarios "del servidor IoT Node.js anterior" que quedaron tras la migración a flutter-api. |

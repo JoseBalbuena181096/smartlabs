@@ -156,10 +156,13 @@ services:
       - DB_DATABASE=${MARIADB_DATABASE}
       - DB_USERNAME=${MARIADB_USER}
       - DB_PASSWORD=${MARIADB_PASSWORD}
-      - MQTT_HOST=${MQTT_HOST:-emqx_host}
+      # MQTT_HOST hardcoded al alias docker, NO al MQTT_HOST de .env (que apunta a la
+      # IP externa 192.168.0.100 para los firmwares). Dentro del network docker el
+      # broker se llama 'emqx_host' (ver section networks->aliases del servicio emqx).
+      - MQTT_HOST=emqx_host
       - MQTT_PORT=1883
-      - MQTT_USERNAME=${MQTT_USERNAME:-smartlabs}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-smartlabs123}
+      - MQTT_USERNAME=${MQTT_USERNAME:-jose}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-public}
       - SERVER_HOST=${SERVER_HOST:-192.168.0.100}
       - API_HOST=${API_HOST:-192.168.0.100}
     networks:
@@ -224,10 +227,13 @@ services:
       - DB_FALLBACK_NAME=${MARIADB_DATABASE}
       
       # Configuración MQTT
-      - MQTT_HOST=${MQTT_HOST:-emqx_host}
+      # MQTT_HOST hardcoded al alias docker, NO al MQTT_HOST de .env (que apunta a la
+      # IP externa 192.168.0.100 para los firmwares). Dentro del network docker el
+      # broker se llama 'emqx_host' (ver section networks->aliases del servicio emqx).
+      - MQTT_HOST=emqx_host
       - MQTT_PORT=1883
-      - MQTT_USERNAME=${MQTT_USERNAME:-smartlabs}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-smartlabs123}
+      - MQTT_USERNAME=${MQTT_USERNAME:-jose}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-public}
       
       # Configuración del Servidor
       - SERVER_HOST=${SERVER_HOST:-192.168.0.100}

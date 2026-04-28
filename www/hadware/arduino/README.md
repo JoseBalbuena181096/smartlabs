@@ -12,7 +12,20 @@ arduino/
 
 ## Compilar / flashear
 
-Arduino IDE 1.x o 2.x:
+### Opción 1: PlatformIO (recomendado)
+
+```bash
+cd lector_universal
+pio run -e nano_new -t upload --upload-port COM<N>     # Nano con bootloader nuevo (115200)
+pio run -e nano_old -t upload --upload-port COM<N>     # Nano con bootloader viejo (57600)
+pio run -e uno      -t upload --upload-port COM<N>     # Arduino UNO
+pio device monitor -e nano_new --port COM<N> --baud 9600
+```
+
+`platformio.ini` en este directorio define los 3 envs y declara la dependencia
+de la librería `miguelbalboa/MFRC522`.
+
+### Opción 2: Arduino IDE
 
 1. Abrir `lector_universal/lector_universal.ino`.
 2. Seleccionar la placa correcta (Arduino UNO/Nano/Mega según el hardware
