@@ -130,7 +130,12 @@ static void uartReaderTask(void* /*param*/) {
     while (Serial2.available()) {
       char c = (char)Serial2.read();
       if (c == '\t') {
-        if (len > 9 && len < UID_MAX) {
+        // Antes el filtro era `len > 9` lo que descartaba UIDs decimales con
+        // bytes pequenos (p.ej. 0x01 0x02 0x03 0x04 -> "01020304" = 8 chars).
+        // Un UID Mifare valido ocupa 4 o 7 bytes; serializado en decimal sin
+        // separadores el minimo es 4 chars (todos bytes 0..9). Con 4 estamos
+        // tranquilos.
+        if (len >= 4 && len < UID_MAX) {
           buf[len] = '\0';
           UidMsg msg;
           memcpy(msg.data, buf, len + 1);

@@ -242,6 +242,9 @@ class PrestamoController {
                 data: {
                     session_active: estadoSesion.active,
                     user: estadoSesion.user,
+                    cards_number: estadoSesion.cards_number || null,
+                    hab_id: estadoSesion.hab_id || null,
+                    device_serie: estadoSesion.device_serie || null,
                     login_count: estadoSesion.count,
                     timestamp: new Date().toISOString()
                 }

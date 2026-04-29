@@ -3,6 +3,10 @@ class Controller {
     protected $db;
 
     public function __construct() {
+        // Falla rapido si la "BD externa" en :4000 no esta disponible
+        // (legacy: en el deploy actual no existe ese puerto; sin esto, mysqli
+        // bloquea ~60s antes del fallback local).
+        ini_set('mysqli.connect_timeout', '2');
         $this->db = Database::getInstance();
         $this->checkSession();
     }

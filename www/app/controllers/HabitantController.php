@@ -68,8 +68,17 @@ class HabitantController extends Controller {
         $registration_ = strtoupper(strip_tags($post['registration']));
         $rfid_         = strip_tags($post['rfid']);
         $device_id     = isset($post['device_id']) ? (int)$post['device_id'] : 0;
+        $device_serie  = isset($post['device_serie']) ? trim(strip_tags($post['device_serie'])) : '';
 
         $message = "";
+
+        // Resolver device_id desde device_serie si solo viene la serie (caso del form actual).
+        if ($device_id <= 0 && $device_serie !== '' && $device_serie !== 'default') {
+            $deviceCheck = $this->db->query("SELECT devices_id FROM `devices` WHERE devices_serie = ?", [$device_serie]);
+            if (!empty($deviceCheck)) {
+                $device_id = (int)$deviceCheck[0]['devices_id'];
+            }
+        }
 
         // Validar el dispositivo seleccionado (debe existir, antes era hardcoded a 1).
         if ($device_id > 0) {

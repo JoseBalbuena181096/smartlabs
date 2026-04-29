@@ -431,45 +431,33 @@ function sanitizeRfid(rfidInput) {
  */
 function processRfidWithSessionLogic(rfid, deviceSerial) {
     console.log('🔄 Procesando RFID con lógica de sesiones:', rfid);
-    
-    // Paso 1: Validar RFID usando la API Flutter
-    validateRfidWithApi(rfid)
-        .then(function(isValid) {
-            if (!isValid) {
-                console.log('❌ RFID inválido:', rfid);
-                document.getElementById('display_new_access').innerHTML = 
-                    '<span class="text-danger"><i class="fa fa-times-circle"></i> RFID inválido: ' + rfid + '</span>';
+
+    // Saltamos validateRfidWithApi cuando ya hay una sesión activa: el UID
+    // que llegó puede ser un equipo (loan_querye) y la api 404 nos haría
+    // pensar que la tarjeta no sirve.
+    checkSessionState()
+        .then(function(sessionState) {
+            console.log('📊 Estado de sesión actual:', sessionState);
+
+            if (sessionState && sessionState.session_active === true) {
+                // Sesión abierta: usar el RFID del usuario de la sesión, no
+                // el rfid que pasamos (que puede ser equipo).
+                const userRfid = sessionState.cards_number || rfid;
+                $('#registration').val(userRfid);
+                window.currentRfid = userRfid;
+                document.getElementById('display_new_access').innerHTML =
+                    '<span class="text-success"><i class="fa fa-sign-in"></i> Sesión activa: ' + (sessionState.user || userRfid) + '</span>';
+                consultarPrestamosUsuario(userRfid);
                 return;
             }
-            
-            console.log('✅ RFID válido:', rfid);
-            
-            // Paso 2: Consultar estado actual de la sesión
-            return checkSessionState();
-        })
-        .then(function(sessionState) {
-            if (sessionState === undefined) return; // Error en validación RFID
-            
-            console.log('📊 Estado de sesión actual:', sessionState);
-            
-            // Paso 3: Decidir acción basada en el estado de la sesión
-            if (sessionState.session_active === false) {
-                // No hay sesión activa (estado = 1), enviar espacio en blanco y limpiar datos
-                console.log('🔄 No hay sesión activa, enviando espacio en blanco y limpiando datos');
-                $('#registration').val(' ');
-                $('#resultado_').html(''); // Limpiar datos del usuario
-                currentRfid = ''; // Limpiar RFID actual
-                document.getElementById('display_new_access').innerHTML = 
-                    '<span class="text-info"><i class="fa fa-sign-out"></i> Sesión cerrada</span>';
-            } else {
-                // Hay una sesión activa (estado = 0), mantener el RFID en el input y consultar préstamos
-                console.log('🔄 Sesión activa detectada, manteniendo RFID y consultando préstamos');
-                $('#registration').val(rfid);
-                currentRfid = rfid;
-                document.getElementById('display_new_access').innerHTML = 
-                    '<span class="text-success"><i class="fa fa-sign-in"></i> Sesión activa: ' + rfid + '</span>';
-                consultarPrestamosUsuario(rfid);
-            }
+
+            // Sesión inactiva: limpiar pantalla
+            console.log('🔄 No hay sesión activa, limpiando datos');
+            $('#registration').val(' ');
+            $('#resultado_').html('');
+            window.currentRfid = '';
+            document.getElementById('display_new_access').innerHTML =
+                '<span class="text-info"><i class="fa fa-sign-out"></i> Sesión cerrada</span>';
         })
         .catch(function(error) {
             console.error('❌ Error procesando RFID:', error);
@@ -627,7 +615,7 @@ function consultarPrestamosUsuario(rfid, retryCount = 0) {
     $.ajax({
         url: '/Loan/index',
         method: 'POST',
-        data: { consult_loan: rfid },
+        data: { consult_loan: rfid, _csrf: '<?php echo htmlspecialchars($csrf ?? Controller::csrfToken()); ?>' },
         timeout: 15000, // 15 segundos para operaciones de base de datos
         cache: false,
         beforeSend: function() {

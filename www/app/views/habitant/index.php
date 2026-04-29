@@ -93,6 +93,8 @@ include __DIR__ . '/../layout/header.php';
                 </div>
                 <div class="card-body">
                   <form method="POST" class="row g-3">
+                    <input type="hidden" name="_csrf" value="<?php echo htmlspecialchars($csrf ?? Controller::csrfToken()); ?>">
+                    <input type="hidden" name="device_serie" id="form_device_serie" value="">
                     <div class="col-md-6">
                       <label for="name" class="form-label"><strong><i class="fa fa-user"></i> Nombre Completo:</strong></label>
                       <input type="text" 
@@ -464,8 +466,14 @@ function deleteHabitant(id) {
         input.type = 'hidden';
         input.name = 'id_to_delete';
         input.value = id;
-        
+
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_csrf';
+        csrfInput.value = '<?php echo htmlspecialchars($csrf ?? Controller::csrfToken()); ?>';
+
         form.appendChild(input);
+        form.appendChild(csrfInput);
         document.body.appendChild(form);
         form.submit();
     }
@@ -478,7 +486,8 @@ function searchByRFID(rfid) {
     const formData = new FormData();
     formData.append('search_rfid', '1');
     formData.append('rfid', rfid);
-    
+    formData.append('_csrf', '<?php echo htmlspecialchars($csrf ?? Controller::csrfToken()); ?>');
+
     fetch('/Habitant/searchByRFID', {
         method: 'POST',
         body: formData
@@ -556,7 +565,7 @@ function process_msg(topic, message) {
     
     console.log(`Mensaje MQTT recibido: ${topic} -> ${msg}`);
     
-    if ((query == "access_query" || query == "scholar_query") && deviceSerie === serialNumber) {
+    if ((query == "access_query" || query == "scholar_query" || query == "loan_queryu") && deviceSerie === serialNumber) {
         // Auto-rellenar campo RFID
         const inputRfid = document.getElementById("rfid");
         if (inputRfid) {
@@ -647,8 +656,8 @@ console.log('🔧 Detectando configuración MQTT para hostname:', hostname);
 // Determinar URL correcta basada en el hostname
 if (hostname === 'localhost' || hostname === '127.0.0.1') {
     // Acceso desde localhost - usar WSS seguro
-    MQTT_WS_URL = 'wss://localhost:8074/mqtt';
-    console.log('📡 Configuración MQTT: Acceso local detectado (WSS)');
+    MQTT_WS_URL = 'ws://localhost:8083/mqtt';
+    console.log('📡 Configuración MQTT: Acceso local detectado (WS)');
 } else if (hostname === '<?php echo $config["server_host"]; ?>') {
     // Acceso desde IP externa - usar WS no seguro para evitar problemas de certificados
     MQTT_WS_URL = 'ws://<?php echo $config["mqtt_host"]; ?>:8083/mqtt';
@@ -709,6 +718,15 @@ function connectMQTT() {
                         console.error(`Error suscribiéndose a ${deviceSerie}/scholar_query:`, error);
                     } else {
                         console.log(`Suscrito a ${deviceSerie}/scholar_query`);
+                    }
+                });
+
+                // Modo prestamo (mode_prestamo.cpp): UID de usuario desconocido cae a este topic
+                mqttClient.subscribe(`${deviceSerie}/loan_queryu`, { qos: 0 }, (error) => {
+                    if (error) {
+                        console.error(`Error suscribiéndose a ${deviceSerie}/loan_queryu:`, error);
+                    } else {
+                        console.log(`Suscrito a ${deviceSerie}/loan_queryu`);
                     }
                 });
             });
@@ -786,9 +804,19 @@ function sendDeviceCommand(action) {
 
 // Inicializar MQTT cuando la página cargue
 document.addEventListener('DOMContentLoaded', function() {
+    // Sincronizar dropdown -> hidden input para que el form mande device_serie
+    const deviceDropdown = document.getElementById('device_id');
+    const formDeviceSerie = document.getElementById('form_device_serie');
+    if (deviceDropdown && formDeviceSerie) {
+        formDeviceSerie.value = deviceDropdown.value;
+        deviceDropdown.addEventListener('change', function () {
+            formDeviceSerie.value = this.value;
+        });
+    }
+
     // Conectar automáticamente después de 2 segundos
     setTimeout(connectMQTT, 2000);
-    
+
     // Reconectar automáticamente si se pierde la conexión
     setInterval(function() {
         if (!mqttConnected) {

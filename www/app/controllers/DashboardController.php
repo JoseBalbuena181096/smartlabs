@@ -46,6 +46,7 @@ class DashboardController extends Controller {
             // Conectar a base de datos externa (como en legacy dashboard.php)
             try {
                 $config = include __DIR__ . '/../../config/app.php';
+                throw new Exception("external_db legacy (puerto 4000) deshabilitado: usa fallback local");
                 $external_db = new mysqli($config['server_host'], 'root', 'emqxpass', 'emqx', 4000);
                 if ($external_db->connect_error) {
                     throw new Exception("Conexión externa fallida: " . $external_db->connect_error);
@@ -301,6 +302,7 @@ class DashboardController extends Controller {
             // También intentar actualizar en la base de datos externa
             try {
                 $config = include __DIR__ . '/../../config/app.php';
+                throw new Exception("external_db legacy (puerto 4000) deshabilitado: usa fallback local");
                 $external_db = new mysqli($config['server_host'], 'root', 'emqxpass', 'emqx', 4000);
                 if (!$external_db->connect_error) {
                     $stmt = $external_db->prepare("INSERT INTO traffic (traffic_date, traffic_hab_id, traffic_device, traffic_state) VALUES (NOW(), 1, ?, ?)");
@@ -349,7 +351,8 @@ class DashboardController extends Controller {
         // Intentar consultar base de datos externa primero (como en legacy)
         try {
             $config = include __DIR__ . '/../../config/app.php';
-            $external_db = new mysqli($config['server_host'], 'root', 'emqxpass', 'emqx', 4000);
+            throw new Exception("external_db legacy (puerto 4000) deshabilitado: usa fallback local");
+                $external_db = new mysqli($config['server_host'], 'root', 'emqxpass', 'emqx', 4000);
             if (!$external_db->connect_error) {
                 // Consultar específicamente en traffic_devices para ver estado (1=on, 0=off)
                 $sql = "SELECT traffic_id, traffic_date, traffic_state FROM traffic_devices WHERE traffic_device = ? ORDER BY traffic_date DESC LIMIT 1";
@@ -446,7 +449,8 @@ class DashboardController extends Controller {
         // Intentar consultar base de datos externa primero (como en legacy)
         try {
             $config = include __DIR__ . '/../../config/app.php';
-            $external_db = new mysqli($config['server_host'], 'root', 'emqxpass', 'emqx', 4000);
+            throw new Exception("external_db legacy (puerto 4000) deshabilitado: usa fallback local");
+                $external_db = new mysqli($config['server_host'], 'root', 'emqxpass', 'emqx', 4000);
             if (!$external_db->connect_error) {
                 // Consultar específicamente en traffic_devices para ver estado (1=on, 0=off)
                 $sql = "SELECT traffic_id, traffic_date, traffic_state FROM traffic_devices WHERE traffic_device = ? ORDER BY traffic_date DESC LIMIT 1";

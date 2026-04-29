@@ -235,62 +235,71 @@ class LoanMQTTClient {
     handleLoanQueryU(message, serialNumber) {
         // Sanear el RFID eliminando prefijo "APP:" si existe
         const sanitizedRfid = this.sanitizeRfid(message);
-        
+
         // Reproducir audio de notificación
         if (window.audio) {
             window.audio.play().catch(error => {
                 console.log('Error al reproducir audio:', error);
             });
         }
-        
+
         // Mostrar en display de nuevo acceso
         const displayElement = document.getElementById('display_new_access');
         if (displayElement) {
             displayElement.innerHTML = 'Procesando RFID: ' + sanitizedRfid;
         }
-        
-        // Procesar RFID con lógica inteligente de sesiones
-        if (typeof processRfidWithSessionLogic === 'function') {
-            processRfidWithSessionLogic(sanitizedRfid, serialNumber);
-        } else {
-            console.warn('⚠️ Función processRfidWithSessionLogic no disponible');
-        }
+
+        // Pequeño delay para que el flutter-api procese su escritura en loan_sessions
+        // antes de que el browser pregunte por el estado.
+        setTimeout(() => {
+            if (typeof processRfidWithSessionLogic === 'function') {
+                processRfidWithSessionLogic(sanitizedRfid, serialNumber);
+            } else {
+                console.warn('⚠️ Función processRfidWithSessionLogic no disponible');
+            }
+        }, 600);
     }
     
     /**
      * Maneja mensajes de consulta de equipo (loan_querye)
      */
     handleLoanQueryE(message, serialNumber) {
-        // Usar el RFID almacenado para refrescar la tabla de préstamos
-        if (window.currentRfid) {
-            // Reproducir audio de notificación
-            if (window.audio) {
-                window.audio.play().catch(error => {
-                    console.log('Error al reproducir audio:', error);
+        const sanitizedRfid = this.sanitizeRfid(message);
+
+        if (window.audio) {
+            window.audio.play().catch(error => {
+                console.log('Error al reproducir audio:', error);
+            });
+        }
+
+        // El firmware unificado publica en loan_querye TANTO los UID de equipo
+        // (préstamo/devolución) como el UID del propio usuario para cerrar
+        // sesión. El backend resuelve ambos casos. La vista solo necesita
+        // re-preguntar el estado de sesión al backend para reflejarlo:
+        //  - si la sesión sigue abierta -> refrescar la lista de préstamos
+        //  - si el backend cerró la sesión -> limpiar la pantalla
+        setTimeout(() => {
+            if (typeof processRfidWithSessionLogic === 'function') {
+                // sanitizedRfid puede ser UID de equipo o de usuario, pero
+                // processRfidWithSessionLogic ignora el rfid si la sesión
+                // está activa y solo refresca; si está cerrada, limpia.
+                processRfidWithSessionLogic(sanitizedRfid, serialNumber);
+            } else if (window.currentRfid) {
+                // Fallback antiguo
+                $.ajax({
+                    url: '/Loan/index',
+                    method: 'POST',
+                    data: { consult_loan: window.currentRfid },
+                    timeout: 10000,
+                    success: function(data) {
+                        $('#resultado_').html('');
+                        const processedData = window.cortarDespuesDeDoctype ?
+                            window.cortarDespuesDeDoctype(data) : data;
+                        $('#resultado_').html(processedData);
+                    },
                 });
             }
-            
-            // Refrescar los datos de préstamos usando el RFID almacenado
-            $.ajax({
-                url: '/Loan/index',
-                method: 'POST',
-                data: { consult_loan: window.currentRfid },
-                timeout: 10000, // 10 segundos timeout
-                success: function(data) {
-                    $('#resultado_').html('');
-                    const processedData = window.cortarDespuesDeDoctype ? 
-                        window.cortarDespuesDeDoctype(data) : data;
-                    $('#resultado_').html(processedData);
-                    console.log('✅ Datos de préstamos actualizados (loan_querye)');
-                },
-                error: function(xhr, status, error) {
-                    console.error('❌ Error refrescando préstamos:', error);
-                    $('#resultado_').html('<div class="alert alert-danger">Error al refrescar préstamos</div>');
-                }
-            });
-        } else {
-            console.log('⚠️ No hay RFID disponible para refrescar datos de préstamos');
-        }
+        }, 600);
     }
     
     /**
