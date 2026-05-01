@@ -59,12 +59,29 @@ log = logging.getLogger(__name__)
 # ------------------------------------------------------------------
 
 async def _get_or_create_station(db: AsyncSession, sn: str) -> Station:
+    """Auto-crea la station si no existe, y MARCA ONLINE si llega un mensaje
+    de su parte. Cualquier scan/mensaje del ESP32 prueba que está vivo —
+    aunque el broker tenga retained `offline`, eso era de un blip pasado."""
     res = await db.execute(select(Station).where(Station.serial_number == sn))
     st = res.scalar_one_or_none()
+    now = _now()
+    became_online = False
     if st is None:
-        st = Station(serial_number=sn, alias=None, online=True, last_seen=_now())
+        st = Station(serial_number=sn, alias=None, online=True, last_seen=now)
         db.add(st)
+        became_online = True
         await db.flush()
+    else:
+        if not st.online:
+            became_online = True
+        st.online = True
+        st.last_seen = now
+    if became_online:
+        # Notificar a admins/kiosko al instante
+        await broker.publish_many(
+            ["admin", f"station:{sn}"],
+            {"type": "station.online", "sn": sn, "at": now.isoformat()},
+        )
     return st
 
 
@@ -147,6 +164,29 @@ async def handle_loan_queryu(sn: str, uid: str) -> None:
             return
 
         if user is None:
+            # ¿Será una herramienta? Si lo es, avisamos al canal capture
+            # como "ya registrado" para que el admin no la asigne dos veces.
+            tool_match = (
+                await db.execute(select(Tool).where(Tool.rfid == uid))
+            ).scalar_one_or_none()
+            if tool_match is not None:
+                await db.commit()
+                await publisher.send_command(sn, "nofound")
+                await broker.publish(
+                    "capture",
+                    {
+                        "type": "tag.known",
+                        "rfid": uid,
+                        "station_sn": sn,
+                        "entity": "tool",
+                        "id": tool_match.id,
+                        "label": f"{tool_match.brand or ''} {tool_match.model or ''}".strip() or tool_match.rfid,
+                        "active": tool_match.active,
+                        "at": _now().isoformat(),
+                    },
+                )
+                return
+
             # Tag desconocido. Emitir evento para captura desde forms admin.
             await db.commit()
             await publisher.send_command(sn, "nofound")
@@ -155,6 +195,22 @@ async def handle_loan_queryu(sn: str, uid: str) -> None:
                 {"type": "tag.unknown", "rfid": uid, "station_sn": sn, "at": _now().isoformat()},
             )
             return
+
+        # Aquí hay user válido — además del flujo normal, avisamos al canal
+        # capture (admin con modal abierto) que la tarjeta ya está asignada.
+        await broker.publish(
+            "capture",
+            {
+                "type": "tag.known",
+                "rfid": uid,
+                "station_sn": sn,
+                "entity": "user",
+                "id": user.id,
+                "label": user.full_name,
+                "active": user.active,
+                "at": _now().isoformat(),
+            },
+        )
 
         # ¿Ya había sesión abierta en esta estación?
         active = await _open_session_for_station(db, station.id)
@@ -305,6 +361,22 @@ async def handle_loan_querye(sn: str, uid: str) -> None:
                 {"type": "tag.unknown", "rfid": uid, "station_sn": sn, "at": _now().isoformat()},
             )
             return
+
+        # Tool conocida — además del flujo normal de préstamo/devolución,
+        # avisamos al canal capture si un admin tenía el modal abierto.
+        await broker.publish(
+            "capture",
+            {
+                "type": "tag.known",
+                "rfid": uid,
+                "station_sn": sn,
+                "entity": "tool",
+                "id": tool.id,
+                "label": f"{tool.brand or ''} {tool.model or ''}".strip() or tool.rfid,
+                "active": tool.active,
+                "at": _now().isoformat(),
+            },
+        )
 
         # ¿Préstamo o devolución?
         existing = (

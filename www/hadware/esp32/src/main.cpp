@@ -48,7 +48,10 @@
 
 static const uint8_t  RELAY_PINS[]              = {12, 13, 14};
 static const unsigned long WIFI_CONNECT_TIMEOUT_MS = 30000;
+static const unsigned long WIFI_CHECK_INTERVAL_MS  = 5000;   // chequeo periodico
+static const unsigned long WIFI_DEAD_RESTART_MS   = 60000;  // ultimo recurso
 static const unsigned long MQTT_RETRY_INTERVAL_MS  = 5000;
+static const unsigned long STATUS_HEARTBEAT_MS    = 30000;  // republica `online` retained
 static const size_t   UID_MAX                   = 24;
 
 // -----------------------------------------------------------------------------
@@ -62,6 +65,9 @@ struct UidMsg { char data[UID_MAX]; };
 static QueueHandle_t uidQueue;
 
 static unsigned long last_mqtt_attempt = 0;
+static unsigned long last_status_heartbeat = 0;
+static unsigned long last_wifi_check = 0;
+static unsigned long wifi_lost_since = 0;  // 0 = wifi conectado
 static bool          ota_ready         = false;
 
 // -----------------------------------------------------------------------------
@@ -72,6 +78,7 @@ static void onMqttMessage(char* topic, byte* payload, unsigned int length);
 static void setupWifi();
 static void setupOTA();
 static void mqttTryReconnect();
+static void wifiWatchdog();
 
 // =============================================================================
 // SETUP / LOOP
@@ -108,8 +115,19 @@ void setup() {
 void loop() {
   if (ota_ready) ArduinoOTA.handle();
 
+  wifiWatchdog();
   if (!mqtt.connected()) mqttTryReconnect();
   mqtt.loop();
+
+  // Heartbeat: republica `{SN}/status online` retained cada STATUS_HEARTBEAT_MS.
+  // Evita que el dashboard quede colgado en `offline` si hubo un blip de WiFi
+  // o si EMQX disparó LWT y al reconectar el cliente local creyó estar
+  // conectado (mqtt.connected()==true) sin re-publicar online.
+  if (mqtt.connected() && millis() - last_status_heartbeat >= STATUS_HEARTBEAT_MS) {
+    String t = topicOf("status");
+    mqtt.publish(t.c_str(), "online", true);
+    last_status_heartbeat = millis();
+  }
 
   UidMsg msg;
   while (xQueueReceive(uidQueue, &msg, 0) == pdTRUE) {
@@ -206,6 +224,36 @@ static void setupOTA() {
   ArduinoOTA.begin();
   ota_ready = true;
   Serial.printf("[ota] listo en %s.local\n", kMode.serial_number);
+}
+
+static void wifiWatchdog() {
+  // Chequeo no bloqueante cada WIFI_CHECK_INTERVAL_MS.
+  // - Si WiFi sigue OK: reinicia el contador `wifi_lost_since`.
+  // - Si WiFi cayo: lanza WiFi.reconnect() (no bloquea, no reinicia ESP).
+  // - Si pasaron WIFI_DEAD_RESTART_MS sin red: ESP.restart() como ultimo
+  //   recurso (no se puede hacer mucho sin red en un sistema MQTT).
+  if (millis() - last_wifi_check < WIFI_CHECK_INTERVAL_MS) return;
+  last_wifi_check = millis();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    if (wifi_lost_since != 0) {
+      Serial.printf("[wifi] reconectado IP=%s\n", WiFi.localIP().toString().c_str());
+      wifi_lost_since = 0;
+    }
+    return;
+  }
+
+  if (wifi_lost_since == 0) {
+    wifi_lost_since = millis();
+    Serial.println("[wifi] conexion perdida, intentando reconectar...");
+  }
+  WiFi.reconnect();
+
+  if (millis() - wifi_lost_since > WIFI_DEAD_RESTART_MS) {
+    Serial.println("[wifi] sin red >60s - restart");
+    delay(200);
+    ESP.restart();
+  }
 }
 
 static void mqttTryReconnect() {

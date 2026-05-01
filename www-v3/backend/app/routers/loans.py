@@ -124,9 +124,11 @@ async def active_sessions(
     db: AsyncSession = Depends(get_session),
     _admin=Depends(require_admin),
 ):
+    from sqlalchemy.orm import selectinload
     return (
         await db.execute(
             select(LoanSession)
+            .options(selectinload(LoanSession.user), selectinload(LoanSession.station))
             .where(LoanSession.closed_at.is_(None))
             .order_by(LoanSession.opened_at.desc())
         )

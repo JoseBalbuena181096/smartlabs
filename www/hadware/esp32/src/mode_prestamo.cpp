@@ -10,7 +10,7 @@
 //   refused                       credencial ajena durante sesion activa
 //   nologin                       backend dice que no hay sesion (resync)
 //
-// Timeout de inactividad: 180 s. Cualquier interaccion lo resetea. Al expirar
+// Timeout de inactividad: 100 s. Cualquier interaccion lo resetea. Al expirar
 // republicamos el UID original a loan_queryu y el backend cierra con `unload`.
 #ifdef MODE_PRESTAMO
 
@@ -25,7 +25,7 @@ const ModeConfig kMode = {
   /* dns2     */ IPAddress(8, 8, 4, 4),
 };
 
-static const unsigned long INACTIVITY_TIMEOUT_MS = 180000UL;
+static const unsigned long INACTIVITY_TIMEOUT_MS = 100000UL;
 static const size_t        UID_MAX               = 24;
 
 static bool          session_active     = false;

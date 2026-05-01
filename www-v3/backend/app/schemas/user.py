@@ -33,6 +33,7 @@ class UserRead(UserBase):
     campus_id: int
     created_at: datetime
     updated_at: datetime
+    email: str  # laxo en lectura: tolera seeds legacy con TLDs reservados
 
 
 class LoginRequest(ORM):

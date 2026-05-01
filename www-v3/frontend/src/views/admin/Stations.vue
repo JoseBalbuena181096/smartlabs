@@ -1,73 +1,144 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useDisplay } from "vuetify";
 import { api } from "../../api/client";
+import { useSnack } from "../../composables/useSnack";
+import PageHeader from "../../components/PageHeader.vue";
+import EmptyState from "../../components/EmptyState.vue";
 
+const { mdAndUp } = useDisplay();
+const snack = useSnack();
 const stations = ref<any[]>([]);
 const dialog = ref(false);
+const editing = ref<any | null>(null);
 const form = ref<any>({ serial_number: "", alias: "" });
+
+function fmt(s: string | null) {
+  if (!s) return "—";
+  return new Date(s).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" });
+}
 
 async function load() {
   const { data } = await api.get("/stations");
   stations.value = data;
 }
 
-async function save() {
-  await api.post("/stations", form.value);
-  dialog.value = false;
+function openCreate() {
+  editing.value = null;
   form.value = { serial_number: "", alias: "" };
-  load();
+  dialog.value = true;
 }
 
-async function rename(s: any) {
-  const alias = prompt("Alias:", s.alias || "");
-  if (alias === null) return;
-  await api.patch(`/stations/${s.id}`, { alias });
-  load();
+function openEdit(s: any) {
+  editing.value = s;
+  form.value = { serial_number: s.serial_number, alias: s.alias || "" };
+  dialog.value = true;
+}
+
+async function save() {
+  try {
+    if (editing.value) {
+      await api.patch(`/stations/${editing.value.id}`, { alias: form.value.alias });
+      snack.success("Estación actualizada");
+    } else {
+      await api.post("/stations", form.value);
+      snack.success("Estación registrada");
+    }
+    dialog.value = false;
+    load();
+  } catch (e: any) {
+    snack.error(e?.response?.data?.detail || "No se pudo guardar");
+  }
 }
 
 onMounted(load);
 </script>
 
 <template>
-  <v-card>
-    <v-card-title class="d-flex align-center">
-      Estaciones
-      <v-spacer />
-      <v-btn color="primary" @click="dialog = true">Nueva</v-btn>
-    </v-card-title>
-    <v-data-table
-      :items="stations"
-      :headers="[
-        { title: 'SN', key: 'serial_number' },
-        { title: 'Alias', key: 'alias' },
-        { title: 'Online', key: 'online' },
-        { title: 'Último visto', key: 'last_seen' },
-        { title: '', key: 'actions', sortable: false },
-      ]"
-      items-per-page="50"
-    >
-      <template #item.online="{ item }">
-        <v-chip size="small" :color="item.online ? 'success' : 'grey'">
-          {{ item.online ? "online" : "offline" }}
-        </v-chip>
-      </template>
-      <template #item.actions="{ item }">
-        <v-btn size="small" variant="text" @click="rename(item)">Renombrar</v-btn>
-      </template>
-    </v-data-table>
-  </v-card>
+  <PageHeader title="Estaciones" subtitle="ESP32 / lectores físicos del almacén" icon="mdi-radar">
+    <v-btn color="primary" prepend-icon="mdi-plus" rounded="lg" @click="openCreate">Nueva estación</v-btn>
+  </PageHeader>
 
-  <v-dialog v-model="dialog" max-width="500">
-    <v-card>
-      <v-card-title>Nueva estación</v-card-title>
-      <v-card-text>
-        <v-text-field v-model="form.serial_number" label="Serial number (p.ej. SMART10003)" />
-        <v-text-field v-model="form.alias" label="Alias (opcional)" />
-      </v-card-text>
-      <v-card-actions>
+  <v-row dense>
+    <v-col v-for="s in stations" :key="s.id" cols="12" sm="6" lg="4">
+      <v-card
+        rounded="lg"
+        elevation="1"
+        class="tec-station-card"
+        :href="`/station/${s.serial_number}`"
+        target="_blank"
+        rel="noopener"
+      >
+        <v-card-text class="pa-5">
+          <div class="d-flex align-start">
+            <span class="tec-pulse" :class="{ 'tec-pulse--off': !s.online }" style="margin-top: 6px" />
+            <div class="ml-3 flex-grow-1">
+              <div class="d-flex align-center">
+                <span class="text-h6 font-weight-bold">{{ s.alias || s.serial_number }}</span>
+                <v-icon size="16" class="ml-2 text-medium-emphasis">mdi-open-in-new</v-icon>
+              </div>
+              <div v-if="s.alias" class="text-caption text-medium-emphasis">{{ s.serial_number }}</div>
+              <div class="d-flex align-center mt-2" style="gap: 10px">
+                <v-chip size="small" :color="s.online ? 'success' : 'grey'" variant="tonal">
+                  {{ s.online ? "Online" : "Offline" }}
+                </v-chip>
+                <span class="text-caption text-medium-emphasis">
+                  Último visto · {{ fmt(s.last_seen) }}
+                </span>
+              </div>
+            </div>
+            <v-btn
+              icon="mdi-pencil-outline"
+              size="small"
+              variant="text"
+              @click.stop.prevent="openEdit(s)"
+            />
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-col>
+
+    <v-col v-if="stations.length === 0" cols="12">
+      <v-card rounded="lg" elevation="0" border>
+        <EmptyState
+          icon="mdi-radar-off"
+          title="Sin estaciones"
+          description="Las estaciones se registran solas cuando un ESP32 se conecta al broker. También puedes crear una manualmente con el botón de arriba."
+        />
+      </v-card>
+    </v-col>
+  </v-row>
+
+  <v-dialog v-model="dialog" :max-width="mdAndUp ? 520 : '100%'" :fullscreen="!mdAndUp" persistent>
+    <v-card rounded="lg">
+      <v-card-title class="pa-5 d-flex align-center">
+        <v-icon class="mr-2" color="primary">mdi-radar</v-icon>
+        <span class="font-weight-bold">{{ editing ? "Editar estación" : "Nueva estación" }}</span>
         <v-spacer />
-        <v-btn @click="dialog = false">Cancelar</v-btn>
-        <v-btn color="primary" @click="save">Guardar</v-btn>
+        <v-btn icon="mdi-close" variant="text" @click="dialog = false" />
+      </v-card-title>
+      <v-divider />
+      <v-card-text class="pa-5">
+        <v-text-field
+          v-model="form.serial_number"
+          label="Serial number (p.ej. SMART10003)"
+          prepend-inner-icon="mdi-identifier"
+          :disabled="!!editing"
+          :hint="editing ? 'El SN no se puede cambiar' : 'Coincide con el primer segmento del topic MQTT del ESP32'"
+          persistent-hint
+        />
+        <v-text-field
+          v-model="form.alias"
+          label="Alias (opcional)"
+          prepend-inner-icon="mdi-tag-outline"
+          placeholder="Almacén principal, Caja A, etc."
+        />
+      </v-card-text>
+      <v-divider />
+      <v-card-actions class="pa-4">
+        <v-spacer />
+        <v-btn variant="text" @click="dialog = false">Cancelar</v-btn>
+        <v-btn color="primary" variant="flat" prepend-icon="mdi-content-save-outline" @click="save">Guardar</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

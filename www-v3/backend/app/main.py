@@ -4,7 +4,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import update
 
+from .db import SessionLocal
+from .models import Station
 from .mqtt.client import run_forever as run_mqtt
 from .routers import areas, auth, health, inventory, loans, stations, tools, users
 from .ws import admin as ws_admin
@@ -14,10 +17,22 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+log = logging.getLogger(__name__)
+
+
+async def _reset_stations_offline() -> None:
+    """Al reiniciar el backend, marca todas las stations como offline.
+    Las que estén realmente vivas vuelven a `online=true` cuando llegan los
+    mensajes retained de `{SN}/status` al re-suscribir el cliente MQTT."""
+    async with SessionLocal() as db:
+        await db.execute(update(Station).values(online=False))
+        await db.commit()
+    log.info("🔄 stations marcadas offline; esperando retained de MQTT…")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await _reset_stations_offline()
     mqtt_task = asyncio.create_task(run_mqtt(), name="mqtt-bridge")
     try:
         yield

@@ -20,13 +20,30 @@ const sessionUser = ref<any | null>(null);
 const heldTools = ref<HeldTool[]>([]);
 const lastAction = ref<{ kind: "prestado" | "devuelto"; tool: HeldTool } | null>(null);
 const online = ref<boolean | null>(null);
+const sessionStartedAt = ref<Date | null>(null);
+const now = ref(new Date());
 let ws: WsClient | null = null;
 let lastActionTimer: number | null = null;
+let clockTimer: number | null = null;
 
-const status = computed(() => {
-  if (online.value === false) return { color: "error", text: "Estación offline" };
-  if (sessionUser.value) return { color: "primary", text: `Sesión activa: ${sessionUser.value.name}` };
-  return { color: "grey", text: "Pasa tu credencial para iniciar" };
+const clockText = computed(() =>
+  now.value.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+);
+const dateText = computed(() =>
+  now.value.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" }),
+);
+const sessionElapsed = computed(() => {
+  if (!sessionStartedAt.value) return "";
+  const sec = Math.floor((now.value.getTime() - sessionStartedAt.value.getTime()) / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+});
+
+const heroState = computed(() => {
+  if (online.value === false) return "offline";
+  if (sessionUser.value) return "active";
+  return "idle";
 });
 
 function fmtDate(s: string | null): string {
@@ -40,13 +57,14 @@ function flashAction(kind: "prestado" | "devuelto", tool: HeldTool) {
   if (lastActionTimer) clearTimeout(lastActionTimer);
   lastActionTimer = window.setTimeout(() => {
     lastAction.value = null;
-  }, 4000);
+  }, 4500);
 }
 
 function handleEvent(ev: any) {
   switch (ev.type) {
     case "session.opened":
       sessionUser.value = ev.user;
+      sessionStartedAt.value = new Date(ev.opened_at || Date.now());
       heldTools.value = (ev.active_loans || []).map((al: any) => ({
         loan_id: al.loan_id,
         tool_id: al.tool.id,
@@ -60,6 +78,7 @@ function handleEvent(ev: any) {
 
     case "session.closed":
       sessionUser.value = null;
+      sessionStartedAt.value = null;
       heldTools.value = [];
       lastAction.value = null;
       break;
@@ -108,72 +127,172 @@ function handleEvent(ev: any) {
 
 onMounted(() => {
   ws = openStationWs(sn, handleEvent);
+  clockTimer = window.setInterval(() => (now.value = new Date()), 1000);
 });
 onBeforeUnmount(() => {
   ws?.close();
   if (lastActionTimer) clearTimeout(lastActionTimer);
+  if (clockTimer) clearInterval(clockTimer);
 });
 </script>
 
 <template>
-  <v-container fluid class="pa-8" style="min-height: 100vh">
-    <v-row justify="center">
-      <v-col cols="12" md="10">
-        <v-card :color="status.color" variant="tonal" class="mb-4">
-          <v-card-title class="text-h3 text-center pa-8">
-            {{ status.text }}
-          </v-card-title>
-          <v-card-subtitle class="text-center pb-4">
-            Estación <strong>{{ sn }}</strong>
-          </v-card-subtitle>
-        </v-card>
+  <div class="tec-kiosk" :class="`tec-kiosk--${heroState}`">
+    <header class="tec-kiosk-bar">
+      <span class="tec-brand">
+        <span class="tec-brand-mark" style="background: #fff; color: var(--tec-blue); width: 32px; height: 32px; font-size: 16px;">T</span>
+        <span class="d-none d-sm-inline">SmartLabs · Almacén</span>
+      </span>
+      <span class="tec-kiosk-meta">
+        <span class="tec-kiosk-conn">
+          <span class="tec-pulse" :class="{ 'tec-pulse--off': online === false }" />
+          <span class="d-none d-sm-inline">{{ online === false ? "Offline" : "Online" }}</span>
+        </span>
+        <span class="tec-kiosk-station">
+          <v-icon size="16" class="mr-1">mdi-radar</v-icon>
+          <strong>{{ sn }}</strong>
+        </span>
+        <span class="tec-kiosk-clock-inline d-none d-sm-inline-flex">
+          <v-icon size="16" class="mr-1">mdi-clock-outline</v-icon>
+          <strong>{{ clockText }}</strong>
+        </span>
+      </span>
+    </header>
 
-        <v-alert
-          v-if="lastAction"
-          :type="lastAction.kind === 'prestado' ? 'warning' : 'success'"
-          variant="tonal"
-          class="mb-4 text-h5"
-          :icon="lastAction.kind === 'prestado' ? 'mdi-arrow-up-bold' : 'mdi-arrow-down-bold'"
-        >
-          {{ lastAction.kind === "prestado" ? "Acabas de prestar" : "Acabas de devolver" }}:
-          <strong>{{ lastAction.tool.brand }} {{ lastAction.tool.model }}</strong>
-          ({{ lastAction.tool.rfid }})
-        </v-alert>
+    <main class="tec-kiosk-main">
+      <!-- HERO compacto -->
+      <section class="tec-hero" :class="`tec-hero--${heroState}`">
+        <div class="tec-hero-icon">
+          <v-icon size="56">
+            {{
+              heroState === "offline"
+                ? "mdi-wifi-off"
+                : heroState === "active"
+                ? "mdi-account-check"
+                : "mdi-card-account-details-outline"
+            }}
+          </v-icon>
+        </div>
 
-        <v-card v-if="sessionUser">
-          <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2">mdi-toolbox</v-icon>
-            Equipos en posesión
-            <v-spacer />
-            <v-chip :color="heldTools.length === 0 ? 'success' : 'warning'" variant="tonal">
-              {{ heldTools.length }} pendiente{{ heldTools.length === 1 ? "" : "s" }}
+        <div v-if="heroState === 'idle'" class="tec-hero-text">
+          <div class="text-h4 font-weight-bold tec-hero-title">Pasa tu credencial</div>
+          <div class="text-body-1 mt-1 tec-hero-sub">Coloca tu tarjeta sobre el lector para iniciar sesión</div>
+        </div>
+
+        <div v-else-if="heroState === 'active'" class="tec-hero-text">
+          <div class="text-overline tec-hero-greet">Sesión activa</div>
+          <div class="text-h4 font-weight-bold tec-hero-title">{{ sessionUser.name }}</div>
+          <div class="d-flex align-center mt-2 flex-wrap" style="gap: 8px">
+            <v-chip color="white" variant="elevated" size="small" prepend-icon="mdi-clock-outline">
+              {{ sessionElapsed }}
             </v-chip>
-          </v-card-title>
+            <v-chip color="white" variant="elevated" size="small" prepend-icon="mdi-toolbox">
+              {{ heldTools.length }} {{ heldTools.length === 1 ? "equipo" : "equipos" }}
+            </v-chip>
+          </div>
+        </div>
 
-          <v-list v-if="heldTools.length > 0">
-            <v-list-item v-for="t in heldTools" :key="t.loan_id">
-              <template #prepend>
-                <v-icon color="warning">mdi-tools</v-icon>
-              </template>
-              <v-list-item-title class="text-h6">
-                {{ t.brand }} {{ t.model }}
-              </v-list-item-title>
-              <v-list-item-subtitle>
-                Tag <strong>{{ t.rfid }}</strong> · prestado {{ fmtDate(t.loaned_at) }}
-                <span v-if="t.due_at">· devolver antes de {{ fmtDate(t.due_at) }}</span>
-              </v-list-item-subtitle>
-            </v-list-item>
-          </v-list>
+        <div v-else class="tec-hero-text">
+          <div class="text-h4 font-weight-bold tec-hero-title">Sin conexión</div>
+          <div class="text-body-1 mt-1 tec-hero-sub">Verifica WiFi y broker MQTT</div>
+        </div>
+      </section>
 
-          <v-card-text v-else class="text-center pa-8">
-            <v-icon color="success" size="64">mdi-check-circle</v-icon>
-            <div class="text-h5 mt-2">Sin equipos pendientes</div>
-            <div class="text-body-2 text-grey">
-              Pasa el tag de una herramienta para prestarla, o tu credencial para cerrar sesión.
+      <!-- ACCIÓN RECIENTE: toast flotante en esquina -->
+      <transition name="toast">
+        <div
+          v-if="lastAction"
+          class="tec-action-toast"
+          :class="`tec-action-toast--${lastAction.kind}`"
+        >
+          <v-icon size="22" class="mr-2">
+            {{ lastAction.kind === "prestado" ? "mdi-arrow-up-bold" : "mdi-arrow-down-bold" }}
+          </v-icon>
+          <div class="flex-grow-1" style="min-width: 0">
+            <div class="text-overline" style="line-height: 1; opacity: .85">
+              {{ lastAction.kind === "prestado" ? "Prestado" : "Devuelto" }}
             </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+            <div class="font-weight-bold" style="line-height: 1.15">
+              {{ lastAction.tool.brand }} {{ lastAction.tool.model }}
+            </div>
+            <div class="text-caption" style="opacity: .85">{{ lastAction.tool.rfid }}</div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- LISTA DE EQUIPOS -->
+      <v-card v-if="sessionUser" class="tec-held-card" rounded="lg" elevation="2">
+        <v-card-title class="d-flex align-center pa-3 pa-sm-4">
+          <v-icon class="mr-2" color="primary">mdi-toolbox</v-icon>
+          <span class="text-subtitle-1 font-weight-bold">Equipos en posesión</span>
+          <v-spacer />
+          <v-chip :color="heldTools.length === 0 ? 'success' : 'warning'" variant="tonal" size="small">
+            {{ heldTools.length }} {{ heldTools.length === 1 ? "pendiente" : "pendientes" }}
+          </v-chip>
+        </v-card-title>
+
+        <v-divider />
+
+        <v-list v-if="heldTools.length > 0" lines="two" density="compact" class="pa-0">
+          <transition-group name="list">
+            <template v-for="t in heldTools" :key="t.loan_id">
+              <v-list-item class="py-2">
+                <template #prepend>
+                  <v-avatar color="warning" variant="tonal" size="36">
+                    <v-icon size="20">mdi-tools</v-icon>
+                  </v-avatar>
+                </template>
+                <v-list-item-title class="font-weight-bold">
+                  {{ t.brand }} {{ t.model }}
+                </v-list-item-title>
+                <v-list-item-subtitle class="text-caption">
+                  Tag <code>{{ t.rfid }}</code> · prestado {{ fmtDate(t.loaned_at) }}
+                  <span v-if="t.due_at"> · devolver antes de {{ fmtDate(t.due_at) }}</span>
+                </v-list-item-subtitle>
+              </v-list-item>
+            </template>
+          </transition-group>
+        </v-list>
+
+        <v-card-text v-else class="text-center py-6">
+          <v-icon color="success" size="48">mdi-check-circle</v-icon>
+          <div class="text-subtitle-1 mt-1 font-weight-bold">Sin equipos pendientes</div>
+          <div class="text-caption text-medium-emphasis">
+            Pasa el tag de una herramienta para prestarla, o tu credencial para cerrar sesión
+          </div>
+        </v-card-text>
+      </v-card>
+    </main>
+
+    <footer class="tec-kiosk-footer">
+      <span>SmartLabs · Tec de Monterrey</span>
+      <span>{{ clockText }}</span>
+    </footer>
+  </div>
 </template>
+
+<style scoped>
+.tec-action-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  padding: 12px 18px;
+  border-radius: 12px;
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  min-width: 240px;
+  max-width: 360px;
+  z-index: 100;
+}
+.tec-action-toast--prestado { background: linear-gradient(135deg, #ef6c00, #f57c00); }
+.tec-action-toast--devuelto { background: linear-gradient(135deg, #2e7d32, #43a047); }
+.toast-enter-active, .toast-leave-active { transition: transform .35s cubic-bezier(.2,.8,.2,1), opacity .25s; }
+.toast-enter-from { opacity: 0; transform: translate(20px, 20px) scale(.95); }
+.toast-leave-to { opacity: 0; transform: translate(0, 12px); }
+
+.list-enter-active, .list-leave-active { transition: all .3s ease; }
+.list-enter-from { opacity: 0; transform: translateX(-20px); }
+.list-leave-to { opacity: 0; transform: translateX(20px); }
+</style>

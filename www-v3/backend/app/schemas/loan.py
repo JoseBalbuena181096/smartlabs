@@ -28,6 +28,18 @@ class LoanExtendRequest(ORM):
     due_at: datetime
 
 
+class _UserMini(ORM):
+    id: int
+    full_name: str
+    rfid: str
+
+
+class _StationMini(ORM):
+    id: int
+    serial_number: str
+    alias: str | None = None
+
+
 class LoanSessionRead(ORM):
     id: int
     station_id: int
@@ -35,3 +47,5 @@ class LoanSessionRead(ORM):
     opened_at: datetime
     closed_at: datetime | None
     close_reason: str | None
+    user: _UserMini | None = None
+    station: _StationMini | None = None

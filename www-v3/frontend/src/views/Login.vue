@@ -25,21 +25,21 @@ async function submit() {
 </script>
 
 <template>
-  <v-container class="fill-height" style="height: 100vh">
-    <v-row justify="center" align="center">
-      <v-col cols="12" sm="8" md="4">
-        <v-card>
-          <v-card-title>SmartLabs · Almacén</v-card-title>
-          <v-card-text>
-            <v-form @submit.prevent="submit">
-              <v-text-field v-model="email" label="Email" type="email" required />
-              <v-text-field v-model="password" label="Contraseña" type="password" required />
-              <v-alert v-if="error" type="error" variant="tonal" class="mb-2">{{ error }}</v-alert>
-              <v-btn type="submit" color="primary" block :loading="loading">Entrar</v-btn>
-            </v-form>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+  <div class="tec-login">
+    <v-card elevation="6" class="pa-6">
+      <div class="d-flex align-center mb-4">
+        <span class="tec-brand-mark" style="background: var(--tec-blue); color: white; width: 40px; height: 40px; font-size: 18px;">T</span>
+        <div class="ml-3">
+          <div class="text-h6 font-weight-bold" style="line-height: 1.1; color: var(--tec-blue)">SmartLabs</div>
+          <div class="text-caption text-grey-darken-1">Almacén · Tec de Monterrey</div>
+        </div>
+      </div>
+      <v-form @submit.prevent="submit">
+        <v-text-field v-model="email" label="Email" type="email" required prepend-inner-icon="mdi-email-outline" />
+        <v-text-field v-model="password" label="Contraseña" type="password" required prepend-inner-icon="mdi-lock-outline" />
+        <v-alert v-if="error" type="error" variant="tonal" class="mb-2">{{ error }}</v-alert>
+        <v-btn type="submit" color="primary" block size="large" :loading="loading">Entrar</v-btn>
+      </v-form>
+    </v-card>
+  </div>
 </template>

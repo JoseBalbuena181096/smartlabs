@@ -1,0 +1,256 @@
+/* Identidad visual del Tec de Monterrey aplicada al stack Vuetify.
+   Colores y tipografias derivados de tec.mx (Raleway + #0039A6). */
+
+:root {
+  --tec-blue: #0039a6;
+  --tec-blue-dark: #002c80;
+  --tec-blue-light: #2962ff;
+  --tec-cyan: #0072ce;
+  --tec-text: #212121;
+  --tec-muted: #797979;
+  --tec-bg: #fafafa;
+  --tec-surface: #ffffff;
+}
+
+html,
+body {
+  font-family: "Raleway", "Helvetica Neue", Arial, sans-serif;
+  color: var(--tec-text);
+  background: var(--tec-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.v-application {
+  font-family: "Raleway", "Helvetica Neue", Arial, sans-serif !important;
+}
+
+h1, h2, h3, h4, h5, h6,
+.v-card-title, .v-toolbar-title, .v-app-bar-title {
+  font-family: "Raleway", "Helvetica Neue", Arial, sans-serif !important;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.v-btn { font-weight: 600; }
+
+/* App bar de marca: fondo azul Tec, texto blanco */
+.tec-appbar {
+  background: var(--tec-blue) !important;
+  color: #fff !important;
+}
+.tec-appbar a, .tec-appbar .v-btn { color: #fff !important; }
+.tec-appbar-section {
+  font-weight: 500;
+  opacity: 0.92;
+  font-size: 16px;
+  border-left: 1px solid rgba(255,255,255,0.3);
+  padding-left: 16px;
+}
+.tec-user-chip {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+/* Sidebar / navigation drawer */
+.tec-nav {
+  background: var(--tec-surface) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+.tec-nav .v-list-item--active {
+  color: var(--tec-blue) !important;
+  background: rgba(0, 57, 166, 0.08) !important;
+  font-weight: 600;
+}
+
+/* Brand mark inline */
+.tec-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.tec-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--tec-blue);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 14px;
+}
+
+/* Tablas mas legibles */
+.v-data-table thead th {
+  background: #f5f5f5 !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 12px !important;
+}
+
+/* Kiosko de estación: layout compacto, hero + lista visibles juntos */
+.tec-kiosk {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--tec-bg);
+  transition: background .4s ease;
+}
+.tec-kiosk--idle {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(0, 57, 166, 0.10), transparent 45%),
+    radial-gradient(circle at 90% 100%, rgba(0, 114, 206, 0.08), transparent 45%),
+    var(--tec-bg);
+}
+.tec-kiosk--active {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 57, 166, 0.12), transparent 45%),
+    var(--tec-bg);
+}
+.tec-kiosk--offline {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(198, 40, 40, 0.08), transparent 50%),
+    var(--tec-bg);
+}
+
+.tec-kiosk-bar {
+  background: var(--tec-blue);
+  color: #fff;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0, 57, 166, 0.18);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+@media (min-width: 600px) { .tec-kiosk-bar { padding: 12px 24px; font-size: 15px; } }
+.tec-kiosk-bar .tec-brand { font-size: 15px; font-weight: 700; }
+@media (min-width: 600px) { .tec-kiosk-bar .tec-brand { font-size: 17px; } }
+.tec-kiosk-meta { display: flex; align-items: center; gap: 16px; opacity: 0.95; flex-wrap: wrap; }
+.tec-kiosk-conn { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; font-size: 13px; }
+.tec-kiosk-station { font-weight: 500; display: inline-flex; align-items: center; }
+.tec-kiosk-clock-inline { display: inline-flex; align-items: center; font-variant-numeric: tabular-nums; }
+
+.tec-kiosk-main {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+@media (min-width: 600px) { .tec-kiosk-main { padding: 20px; gap: 16px; } }
+
+.tec-hero {
+  width: 100%;
+  max-width: 980px;
+  border-radius: 16px;
+  padding: 16px 20px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  box-shadow: 0 6px 18px rgba(0, 57, 166, 0.18);
+  transition: background .4s ease;
+}
+@media (min-width: 600px) {
+  .tec-hero { padding: 22px 28px; border-radius: 20px; gap: 24px; }
+}
+.tec-hero--idle {
+  background: linear-gradient(135deg, var(--tec-blue) 0%, var(--tec-cyan) 100%);
+}
+.tec-hero--active {
+  background: linear-gradient(135deg, var(--tec-blue-dark) 0%, var(--tec-blue) 100%);
+}
+.tec-hero--offline {
+  background: linear-gradient(135deg, #6e1717 0%, #c62828 100%);
+}
+.tec-hero-icon {
+  background: rgba(255,255,255,0.16);
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tec-hero-text { flex: 1 1 auto; min-width: 0; }
+.tec-hero-title { letter-spacing: -0.01em; line-height: 1.15; }
+.tec-hero-sub { opacity: 0.92; }
+.tec-hero-greet { letter-spacing: 0.18em; opacity: 0.8; font-size: 11px; }
+
+.tec-action-banner {
+  width: 100%;
+  max-width: 980px;
+}
+
+.tec-held-card {
+  width: 100%;
+  max-width: 980px;
+}
+.tec-held-card code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.tec-kiosk-footer {
+  padding: 8px 20px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--tec-muted);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(6px);
+}
+
+/* Punto pulsante (estaciones, dashboard) */
+.tec-pulse {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2e7d32;
+  position: relative;
+  flex-shrink: 0;
+}
+.tec-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(46, 125, 50, 0.45);
+  animation: tec-pulse 1.6s ease-out infinite;
+}
+.tec-pulse--off { background: #b0bec5; }
+.tec-pulse--off::after { animation: none; border-color: transparent; }
+@keyframes tec-pulse {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.tec-station-card { transition: transform .15s ease, box-shadow .15s ease; }
+.tec-station-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 57, 166, 0.10); }
+
+/* Login centrado con identidad Tec */
+.tec-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(0, 57, 166, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(0, 114, 206, 0.08), transparent 40%),
+    var(--tec-bg);
+}
+.tec-login .v-card { width: 100%; max-width: 420px; }
