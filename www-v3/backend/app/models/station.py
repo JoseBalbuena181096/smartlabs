@@ -23,3 +23,4 @@ class Station(Base):
     alias: Mapped[str | None] = mapped_column(Text)
     online: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    face_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

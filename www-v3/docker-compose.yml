@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: smartlabs-v3-postgres
     restart: unless-stopped
     environment:
@@ -42,6 +42,8 @@ services:
       MQTT_CLIENT_ID: smartlabs-v3-backend
       LOAN_DUE_HOURS: ${LOAN_DUE_HOURS:-8}
       INACTIVITY_TIMEOUT_SECONDS: ${INACTIVITY_TIMEOUT_SECONDS:-180}
+      FACE_SERVICE_TOKEN: ${FACE_SERVICE_TOKEN:-change-me-face-service-token}
+      FACE_SIMILARITY_THRESHOLD: ${FACE_SIMILARITY_THRESHOLD:-0.6}
     ports:
       - "${BACKEND_PORT:-8001}:8000"
     networks:
@@ -60,6 +62,31 @@ services:
     volumes:
       - frontend-dist:/var/www/html
     restart: "no"
+    networks:
+      - v3-internal
+
+  face-service:
+    build: ./face-service
+    container_name: smartlabs-v3-face
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      RTSP_URL: ${RTSP_URL:-rtsp://user:pass@192.168.0.50:554/stream2}
+      BACKEND_URL: http://backend:8000
+      BACKEND_TOKEN: ${FACE_SERVICE_TOKEN:-change-me-face-service-token}
+      SIMILARITY_THRESHOLD: ${FACE_SIMILARITY_THRESHOLD:-0.6}
+      # Estación que esta cámara vigila — si vacío, el loop autónomo se
+      # desactiva y solo opera en modo manual (admin /register, /identify
+      # ad-hoc). Cuando hay SN, intenta identificar cada 2s y si match
+      # abre sesión en esa estación.
+      STATION_SN: ${FACE_STATION_SN:-}
+      AUTO_IDENTIFY_INTERVAL: ${FACE_AUTO_INTERVAL:-2.0}
+      AUTO_IDENTIFY_MIN_SCORE: ${FACE_AUTO_MIN_SCORE:-0.5}
+      AUTO_IDENTIFY_SETTLE_SECONDS: ${FACE_AUTO_SETTLE:-60}
+    ports:
+      - "${FACE_SERVICE_PORT:-8500}:8500"
     networks:
       - v3-internal
 

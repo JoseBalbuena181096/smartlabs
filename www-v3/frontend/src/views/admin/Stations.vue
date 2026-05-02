@@ -25,13 +25,13 @@ async function load() {
 
 function openCreate() {
   editing.value = null;
-  form.value = { serial_number: "", alias: "" };
+  form.value = { serial_number: "", alias: "", face_enabled: true };
   dialog.value = true;
 }
 
 function openEdit(s: any) {
   editing.value = s;
-  form.value = { serial_number: s.serial_number, alias: s.alias || "" };
+  form.value = { serial_number: s.serial_number, alias: s.alias || "", face_enabled: s.face_enabled };
   dialog.value = true;
 }
 
@@ -51,6 +51,20 @@ async function save() {
   }
 }
 
+async function toggleFace(s: any, val: boolean) {
+  // Optimista: actualizamos UI antes de la respuesta para que el switch
+  // no se sienta lento. Si falla, rollback + snack de error.
+  const prev = s.face_enabled;
+  s.face_enabled = val;
+  try {
+    await api.patch(`/stations/${s.id}`, { face_enabled: val });
+    snack.success(val ? "Reconocimiento facial activado" : "Reconocimiento facial desactivado");
+  } catch (e: any) {
+    s.face_enabled = prev;
+    snack.error(e?.response?.data?.detail || "No se pudo cambiar");
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -65,20 +79,23 @@ onMounted(load);
         rounded="lg"
         elevation="1"
         class="tec-station-card"
-        :href="`/station/${s.serial_number}`"
-        target="_blank"
-        rel="noopener"
       >
         <v-card-text class="pa-5">
           <div class="d-flex align-start">
             <span class="tec-pulse" :class="{ 'tec-pulse--off': !s.online }" style="margin-top: 6px" />
             <div class="ml-3 flex-grow-1">
-              <div class="d-flex align-center">
+              <a
+                :href="`/station/${s.serial_number}`"
+                target="_blank"
+                rel="noopener"
+                class="d-flex align-center text-decoration-none"
+                style="color: inherit"
+              >
                 <span class="text-h6 font-weight-bold">{{ s.alias || s.serial_number }}</span>
                 <v-icon size="16" class="ml-2 text-medium-emphasis">mdi-open-in-new</v-icon>
-              </div>
+              </a>
               <div v-if="s.alias" class="text-caption text-medium-emphasis">{{ s.serial_number }}</div>
-              <div class="d-flex align-center mt-2" style="gap: 10px">
+              <div class="d-flex align-center mt-2 flex-wrap" style="gap: 10px">
                 <v-chip size="small" :color="s.online ? 'success' : 'grey'" variant="tonal">
                   {{ s.online ? "Online" : "Offline" }}
                 </v-chip>
@@ -92,6 +109,26 @@ onMounted(load);
               size="small"
               variant="text"
               @click.stop.prevent="openEdit(s)"
+            />
+          </div>
+          <v-divider class="my-3" />
+          <div class="d-flex align-center">
+            <v-icon :color="s.face_enabled ? 'primary' : 'grey'" class="mr-2">
+              mdi-face-recognition
+            </v-icon>
+            <div class="flex-grow-1">
+              <div class="text-body-2 font-weight-medium">Reconocimiento facial</div>
+              <div class="text-caption text-medium-emphasis">
+                {{ s.face_enabled ? "La cámara abre/cierra sesiones" : "Solo por tarjeta RFID" }}
+              </div>
+            </div>
+            <v-switch
+              :model-value="s.face_enabled"
+              color="primary"
+              hide-details
+              density="compact"
+              inset
+              @update:model-value="(v) => toggleFace(s, !!v)"
             />
           </div>
         </v-card-text>
@@ -132,6 +169,16 @@ onMounted(load);
           label="Alias (opcional)"
           prepend-inner-icon="mdi-tag-outline"
           placeholder="Almacén principal, Caja A, etc."
+        />
+        <v-switch
+          v-if="!editing"
+          v-model="form.face_enabled"
+          color="primary"
+          inset
+          hide-details
+          density="comfortable"
+          label="Activar reconocimiento facial"
+          class="mt-2"
         />
       </v-card-text>
       <v-divider />

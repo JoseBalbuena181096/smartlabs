@@ -6,6 +6,7 @@ from .station import Station
 from .session import LoanSession
 from .loan import Loan
 from .inventory import InventoryRun, InventoryScan
+from .face import FaceEmbedding
 
 __all__ = [
     "Campus",
@@ -17,4 +18,5 @@ __all__ = [
     "Loan",
     "InventoryRun",
     "InventoryScan",
+    "FaceEmbedding",
 ]

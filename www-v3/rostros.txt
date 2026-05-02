@@ -1,0 +1,1561 @@
+# SmartLabs — Reconocimiento Facial para Préstamo de Herramientas
+
+## Resumen
+
+Integrar reconocimiento facial como método alternativo de autenticación para el sistema de préstamo de herramientas. El empleado podrá identificarse con **tag RFID** (ya existente) **o cámara** (nuevo), a su elección. Ambos métodos devuelven el mismo `hab_id` y continúan el flujo de préstamo sin cambios.
+
+**Hardware nuevo:** Cámara TP-Link Tapo C210 (ya adquirida), conectada al router local del lab por WiFi.
+
+**Software nuevo:** 2 contenedores Docker adicionales:
+- `face-service` — Python + FastAPI + InsightFace + cliente MQTT
+- `qdrant` — Base de datos vectorial para almacenar embeddings faciales
+
+**Costo adicional:** $0 (todo es software libre y corre local).
+
+---
+
+## Arquitectura General
+
+```
+                  MÉTODO A (ya existe)              MÉTODO B (nuevo)
+                  ──────────────────              ─────────────────
+
+                  [Empleado pasa tag]             [Empleado mira cámara]
+                         │                                │
+                    [MFRC522 lee UID]              [Tapo C210 stream RTSP]
+                         │                                │
+                    [ESP32 publica]                [face-service captura frame]
+                    MQTT: loan_queryu                     │
+                         │                        [InsightFace genera vector 512D]
+                         │                                │
+                  [MariaDB busca en               [Qdrant busca vector similar]
+                   tabla cards]                           │
+                         │                         hab_id encontrado
+                         │                                │
+                         │                        [face-service publica]
+                         │                         MQTT: loan_queryu
+                         │                                │
+                         └──────────┬─────────────────────┘
+                                    │
+                              hab_id = 42
+                                    │
+                         [Flujo de préstamo normal]
+                         (ya implementado, no cambia)
+```
+
+---
+
+## Vínculo entre MariaDB y Qdrant
+
+La clave que une ambas bases de datos es **`hab_id`** — el identificador único del empleado que ya existe en MariaDB.
+
+### MariaDB (datos que ya tienes)
+
+```
+Tabla: habintants
+┌────────┬──────────────┬───────────────┬──────────────┐
+│ hab_id │ hab_name     │ hab_card_id   │ hab_email    │
+├────────┼──────────────┼───────────────┼──────────────┤
+│ 42     │ Juan Pérez   │ 5             │ juan@tec.mx  │
+│ 43     │ María López  │ 8             │ maria@tec.mx │
+│ 44     │ Carlos Ruiz  │ 12            │ carlos@tec.mx│
+│ 45     │ Ana Torres   │ NULL          │ ana@tec.mx   │  ← sin tag, solo rostro
+└────────┴──────────────┴───────────────┴──────────────┘
+
+Tabla: cards
+┌──────────┬─────────────────────┬────────┐
+│ cards_id │ cards_number (UID)  │ hab_id │
+├──────────┼─────────────────────┼────────┤
+│ 5        │ 04:A3:2B:7F         │ 42     │
+│ 8        │ 04:F1:9C:D2         │ 43     │
+│ 12       │ 04:B8:44:E1         │ 44     │
+└──────────┴─────────────────────┴────────┘
+```
+
+### Qdrant (datos nuevos — múltiples vectores por empleado)
+
+```
+Colección: faces
+┌────┬────────┬────────────┬──────────────────────────────────────┐
+│ id │ hab_id │ position   │ vector (512 dimensiones)              │
+├────┼────────┼────────────┼──────────────────────────────────────┤
+│ 1  │ 42     │ frontal    │ [0.023, -0.156, 0.891, ... x512]     │  ← Juan de frente
+│ 2  │ 42     │ izquierda  │ [0.019, -0.161, 0.885, ... x512]     │  ← Juan girado izq.
+│ 3  │ 42     │ derecha    │ [0.027, -0.149, 0.894, ... x512]     │  ← Juan girado der.
+│ 4  │ 42     │ arriba     │ [0.021, -0.158, 0.889, ... x512]     │  ← Juan mirando arriba
+│ 5  │ 42     │ abajo      │ [0.025, -0.153, 0.887, ... x512]     │  ← Juan mirando abajo
+│ 6  │ 43     │ frontal    │ [0.445, 0.012, -0.334, ... x512]     │  ← María de frente
+│ 7  │ 43     │ izquierda  │ [0.441, 0.015, -0.330, ... x512]     │  ← María girada izq.
+│ 8  │ 43     │ derecha    │ [0.449, 0.009, -0.338, ... x512]     │  ← María girada der.
+│ 9  │ 43     │ arriba     │ [0.443, 0.013, -0.332, ... x512]     │  ← María mirando arriba
+│ 10 │ 43     │ abajo      │ [0.447, 0.011, -0.336, ... x512]     │  ← María mirando abajo
+│ 11 │ 45     │ foto_manual│ [0.789, -0.034, 0.456, ... x512]     │  ← Ana (solo 1 foto)
+└────┴────────┴────────────┴──────────────────────────────────────┘
+```
+
+Cada empleado tiene **5 vectores** (uno por posición). Cuando Qdrant busca "¿a quién se parece este rostro?", compara contra TODOS los vectores. Si Juan está mirando a la izquierda, su vector se parecerá más al vector "izquierda" de Juan que al "frontal", y Qdrant lo identificará correctamente.
+
+### Cómo se vinculan
+
+- **Con tag:** UID `04:A3:2B:7F` → MariaDB busca en `cards` → `hab_id = 42` → obtiene datos de `habintants`
+- **Con cara:** vector `[0.023, ...]` → Qdrant busca el más similar → `hab_id = 42` → con ese ID se consulta MariaDB para obtener nombre, email, etc.
+
+Qdrant **solo** guarda `hab_id` + vector. No duplica nombre, email ni nada más. MariaDB sigue siendo la fuente de verdad para todos los datos del empleado.
+
+---
+
+## Componentes Nuevos
+
+### 1. Cámara TP-Link Tapo C210
+
+**Especificaciones relevantes:**
+- Resolución: 2304 x 1296 (3MP) — más que suficiente para reconocimiento facial
+- Conectividad: WiFi — se conecta al router local del lab
+- Protocolo de video: RTSP (Real Time Streaming Protocol)
+- Visión nocturna: IR — funciona en el lab con poca luz
+
+**Configuración RTSP:**
+1. Instalar la app Tapo en un celular.
+2. Conectar la cámara al WiFi del router local del lab.
+3. En la app Tapo, ir a la cámara → Configuración avanzada → Cuenta de la cámara → Crear usuario/contraseña para RTSP.
+4. La URL RTSP será: `rtsp://usuario:contraseña@192.168.0.X:554/stream1`
+   - `stream1` = resolución alta (3MP)
+   - `stream2` = resolución baja (recomendado para reconocimiento, menos carga)
+5. Asignar IP fija a la cámara en el router (ej: 192.168.0.50).
+
+**Verificar que funciona:**
+```bash
+# Desde el servidor, instalar ffmpeg y probar el stream
+ffmpeg -i rtsp://usuario:contraseña@192.168.0.50:554/stream2 -frames:v 1 test.jpg
+```
+Si genera `test.jpg` con una imagen de la cámara, está listo.
+
+---
+
+### 2. Qdrant (Base de Datos Vectorial)
+
+**¿Qué es?** Una base de datos especializada en buscar vectores similares. Recibe un vector de 512 números (el embedding del rostro) y responde "el más parecido es hab_id X con un 94% de similitud" en milisegundos.
+
+**¿Por qué no MariaDB?** MariaDB puede guardar vectores como texto o blob, pero no puede hacer búsqueda por similitud eficiente. Tendría que comparar uno por uno con todos los rostros registrados. Qdrant usa índices HNSW diseñados para esto.
+
+**Recursos que consume:**
+- RAM: ~100-200 MB (para cientos de rostros es mínimo)
+- Disco: ~50 MB + datos
+- CPU: mínimo
+
+**Docker-compose:**
+```yaml
+qdrant:
+  image: qdrant/qdrant:latest
+  container_name: smartlabs-qdrant
+  volumes:
+    - qdrant-data:/qdrant/storage
+  ports:
+    - "6333:6333"    # API REST
+    - "6334:6334"    # gRPC
+  restart: always
+  networks:
+    - smartlabs-network
+```
+
+---
+
+### 3. face-service (Servicio de Reconocimiento Facial)
+
+**Stack:** Python 3.11 + FastAPI + InsightFace + OpenCV + MQTT (paho-mqtt) + qdrant-client
+
+**¿Qué hace?**
+- Se conecta al stream RTSP de la Tapo C210
+- Usa InsightFace para detectar rostros y generar embeddings de 512 dimensiones
+- Almacena/busca embeddings en Qdrant
+- Publica resultados por MQTT al broker EMQX (mismo protocolo que los ESP32)
+
+#### Estructura del proyecto
+
+```
+face-service/
+├── Dockerfile
+├── requirements.txt
+├── src/
+│   ├── main.py              # FastAPI app + endpoints
+│   ├── config.py            # Variables de entorno
+│   ├── camera.py            # Captura de frames RTSP
+│   ├── face_engine.py       # InsightFace: detección + embeddings
+│   ├── vector_store.py      # Cliente Qdrant: guardar/buscar
+│   └── mqtt_client.py       # Publicar identificaciones por MQTT
+```
+
+#### Dockerfile
+
+```dockerfile
+FROM python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8500"]
+```
+
+#### requirements.txt
+
+```
+fastapi==0.109.0
+uvicorn==0.27.0
+insightface==0.7.3
+onnxruntime==1.16.3
+opencv-python-headless==4.9.0.80
+numpy==1.26.3
+qdrant-client==1.7.3
+paho-mqtt==1.6.1
+python-multipart==0.0.6
+Pillow==10.2.0
+```
+
+#### config.py
+
+```python
+import os
+
+# Cámara
+RTSP_URL = os.getenv("RTSP_URL", "rtsp://usuario:pass@192.168.0.50:554/stream2")
+
+# Qdrant
+QDRANT_HOST = os.getenv("QDRANT_HOST", "qdrant")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+COLLECTION_NAME = "faces"
+VECTOR_SIZE = 512
+
+# MQTT
+MQTT_HOST = os.getenv("MQTT_HOST", "emqx")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_USER = os.getenv("MQTT_USER", "emqxuser")
+MQTT_PASS = os.getenv("MQTT_PASS", "emqxpass")
+
+# Identificación
+SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.6"))
+# Si la similitud es menor a 0.6, no se considera match
+```
+
+#### camera.py
+
+```python
+import cv2
+import numpy as np
+from .config import RTSP_URL
+
+
+def capture_frame() -> np.ndarray:
+    """Captura un frame del stream RTSP de la Tapo C210."""
+    cap = cv2.VideoCapture(RTSP_URL)
+    if not cap.isOpened():
+        raise ConnectionError(f"No se pudo conectar a la cámara: {RTSP_URL}")
+
+    ret, frame = cap.read()
+    cap.release()
+
+    if not ret:
+        raise RuntimeError("No se pudo capturar frame de la cámara")
+
+    return frame
+
+
+def frame_to_jpeg(frame: np.ndarray) -> bytes:
+    """Convierte un frame numpy a bytes JPEG."""
+    _, buffer = cv2.imencode('.jpg', frame)
+    return buffer.tobytes()
+```
+
+#### face_engine.py
+
+```python
+import insightface
+import numpy as np
+import math
+from insightface.app import FaceAnalysis
+
+# Inicializar modelo (se descarga automáticamente la primera vez)
+face_app = FaceAnalysis(
+    name="buffalo_l",       # Modelo pre-entrenado, buena precisión
+    providers=["CPUExecutionProvider"]  # CPU, no necesitas GPU
+)
+face_app.prepare(ctx_id=0, det_size=(640, 640))
+
+# ──────────────────────────────────────
+# Umbrales para detección de posición
+# ──────────────────────────────────────
+# Basados en la posición relativa de los landmarks (ojos, nariz, boca)
+# respecto al bounding box del rostro.
+
+# Cuando la nariz está centrada → frontal
+# Cuando la nariz se desplaza a la izquierda → rostro girado a la derecha (y viceversa)
+# Cuando la nariz sube → mirando hacia arriba (y viceversa)
+
+POSITION_THRESHOLDS = {
+    "frontal":   {"yaw_min": -10, "yaw_max": 10,  "pitch_min": -10, "pitch_max": 10},
+    "izquierda": {"yaw_min": -40, "yaw_max": -12, "pitch_min": -15, "pitch_max": 15},
+    "derecha":   {"yaw_min": 12,  "yaw_max": 40,  "pitch_min": -15, "pitch_max": 15},
+    "arriba":    {"yaw_min": -15, "yaw_max": 15,  "pitch_min": -40, "pitch_max": -12},
+    "abajo":     {"yaw_min": -15, "yaw_max": 15,  "pitch_min": 12,  "pitch_max": 40},
+}
+
+
+def estimate_head_pose(face) -> dict:
+    """
+    Estima la orientación de la cabeza usando los 5 landmarks del rostro.
+    
+    Landmarks de InsightFace (2D keypoints):
+      [0] = ojo izquierdo
+      [1] = ojo derecho
+      [2] = punta de la nariz
+      [3] = esquina izquierda de la boca
+      [4] = esquina derecha de la boca
+    
+    Retorna yaw (giro horizontal) y pitch (giro vertical) en grados aproximados.
+    - yaw negativo = girado a la izquierda del empleado
+    - yaw positivo = girado a la derecha del empleado
+    - pitch negativo = mirando hacia arriba
+    - pitch positivo = mirando hacia abajo
+    """
+    landmarks = face.kps  # array de 5 puntos [x, y]
+    
+    ojo_izq = landmarks[0]
+    ojo_der = landmarks[1]
+    nariz = landmarks[2]
+    boca_izq = landmarks[3]
+    boca_der = landmarks[4]
+    
+    # Centro entre los ojos
+    centro_ojos_x = (ojo_izq[0] + ojo_der[0]) / 2
+    centro_ojos_y = (ojo_izq[1] + ojo_der[1]) / 2
+    
+    # Distancia entre ojos (referencia de escala)
+    dist_ojos = math.dist(ojo_izq, ojo_der)
+    
+    if dist_ojos < 1:
+        return {"yaw": 0, "pitch": 0}
+    
+    # YAW: desplazamiento horizontal de la nariz respecto al centro de los ojos
+    # Si la nariz está a la derecha del centro → yaw positivo (giró a la derecha)
+    yaw = ((nariz[0] - centro_ojos_x) / dist_ojos) * 60  # escalado a grados aprox.
+    
+    # PITCH: desplazamiento vertical de la nariz respecto a los ojos
+    # Centro de la boca como referencia inferior
+    centro_boca_y = (boca_izq[1] + boca_der[1]) / 2
+    dist_vertical = centro_boca_y - centro_ojos_y  # distancia ojos-boca
+    
+    if dist_vertical < 1:
+        return {"yaw": round(yaw, 1), "pitch": 0}
+    
+    # Proporción nariz entre ojos y boca
+    nariz_ratio = (nariz[1] - centro_ojos_y) / dist_vertical
+    # Normalmente la nariz está al ~45% entre ojos y boca
+    # Si sube (ratio < 0.35) → mirando arriba, si baja (ratio > 0.55) → mirando abajo
+    pitch = (nariz_ratio - 0.45) * 120  # escalado a grados aprox.
+    
+    return {"yaw": round(yaw, 1), "pitch": round(pitch, 1)}
+
+
+def detect_position(face) -> str | None:
+    """
+    Detecta automáticamente en qué posición está el rostro.
+    Retorna: "frontal", "izquierda", "derecha", "arriba", "abajo", o None si no encaja.
+    """
+    pose = estimate_head_pose(face)
+    yaw = pose["yaw"]
+    pitch = pose["pitch"]
+    
+    for position, thresholds in POSITION_THRESHOLDS.items():
+        if (thresholds["yaw_min"] <= yaw <= thresholds["yaw_max"] and
+            thresholds["pitch_min"] <= pitch <= thresholds["pitch_max"]):
+            return position
+    
+    return None  # Ángulo intermedio, no encaja en ninguna posición
+
+
+def get_face_with_pose(frame: np.ndarray) -> dict | None:
+    """
+    Detecta el rostro principal, genera su embedding y estima la posición.
+    Retorna dict con embedding, posición detectada, pose y confianza.
+    Retorna None si no hay rostro.
+    """
+    faces = face_app.get(frame)
+    
+    if len(faces) == 0:
+        return None
+    
+    # Tomar el rostro más grande (más cercano a la cámara)
+    if len(faces) > 1:
+        faces = sorted(
+            faces,
+            key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]),
+            reverse=True
+        )
+    
+    face = faces[0]
+    pose = estimate_head_pose(face)
+    position = detect_position(face)
+    
+    return {
+        "embedding": face.normed_embedding,
+        "position": position,
+        "pose": pose,
+        "det_score": float(face.det_score),
+        "bbox": face.bbox.tolist()
+    }
+
+
+def get_embedding(frame: np.ndarray) -> np.ndarray | None:
+    """
+    Detecta un rostro en el frame y retorna su embedding (512D).
+    Retorna None si no detecta rostro.
+    """
+    result = get_face_with_pose(frame)
+    if result is None:
+        return None
+    return result["embedding"]
+
+
+def get_all_faces(frame: np.ndarray) -> list:
+    """Retorna todos los rostros detectados con sus bounding boxes y poses."""
+    faces = face_app.get(frame)
+    results = []
+    for face in faces:
+        pose = estimate_head_pose(face)
+        position = detect_position(face)
+        results.append({
+            "bbox": face.bbox.tolist(),
+            "embedding": face.normed_embedding.tolist(),
+            "det_score": float(face.det_score),
+            "pose": pose,
+            "position": position
+        })
+    return results
+```
+
+#### vector_store.py
+
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance, VectorParams, PointStruct, Filter,
+    FieldCondition, MatchValue
+)
+from .config import QDRANT_HOST, QDRANT_PORT, COLLECTION_NAME, VECTOR_SIZE
+
+client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+
+
+def init_collection():
+    """Crea la colección 'faces' si no existe."""
+    collections = [c.name for c in client.get_collections().collections]
+    if COLLECTION_NAME not in collections:
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(
+                size=VECTOR_SIZE,  # 512 dimensiones de InsightFace
+                distance=Distance.COSINE  # Similitud coseno
+            )
+        )
+        print(f"Colección '{COLLECTION_NAME}' creada")
+    else:
+        print(f"Colección '{COLLECTION_NAME}' ya existe")
+
+
+def register_face(hab_id: int, embeddings: list[list[float]], positions: list[str]) -> dict:
+    """
+    Registra MÚLTIPLES embeddings de un rostro vinculados a un hab_id.
+    Cada embedding corresponde a una posición diferente (frontal, izquierda, etc.).
+    Esto mejora la tasa de reconocimiento en ángulos variados.
+    
+    Args:
+        hab_id: ID del empleado en MariaDB
+        embeddings: Lista de vectores 512D (uno por posición capturada)
+        positions: Lista de nombres de posición ("frontal", "izquierda", etc.)
+    """
+    # Primero eliminar embeddings anteriores de este hab_id (re-registro limpio)
+    delete_face(hab_id)
+
+    # Obtener el siguiente ID disponible
+    info = client.get_collection(COLLECTION_NAME)
+    base_id = info.points_count + 1
+
+    # Guardar un punto por cada posición capturada
+    points = []
+    for i, (embedding, position) in enumerate(zip(embeddings, positions)):
+        points.append(
+            PointStruct(
+                id=base_id + i,
+                vector=embedding,
+                payload={
+                    "hab_id": hab_id,
+                    "position": position  # "frontal", "izquierda", etc.
+                }
+            )
+        )
+
+    client.upsert(
+        collection_name=COLLECTION_NAME,
+        points=points
+    )
+
+    return {
+        "status": "registered",
+        "hab_id": hab_id,
+        "vectors_count": len(points),
+        "positions": positions
+    }
+
+
+def search_face(embedding: list[float], threshold: float = 0.6) -> dict | None:
+    """
+    Busca el rostro más similar en Qdrant.
+    Retorna hab_id y score si supera el threshold, None si no hay match.
+    """
+    results = client.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=embedding,
+        limit=1
+    )
+
+    if not results:
+        return None
+
+    best = results[0]
+    if best.score >= threshold:
+        return {
+            "hab_id": best.payload["hab_id"],
+            "score": round(best.score, 4)
+        }
+
+    return None
+
+
+def delete_face(hab_id: int) -> bool:
+    """Elimina TODOS los embeddings de un empleado (todas las posiciones)."""
+    existing = client.scroll(
+        collection_name=COLLECTION_NAME,
+        scroll_filter=Filter(
+            must=[FieldCondition(key="hab_id", match=MatchValue(value=hab_id))]
+        ),
+        limit=100  # Máximo de posiciones posibles
+    )
+
+    if existing[0]:
+        point_ids = [p.id for p in existing[0]]
+        client.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector=point_ids
+        )
+        return True
+    return False
+
+
+def get_registered_count() -> int:
+    """Retorna cuántos rostros hay registrados."""
+    info = client.get_collection(COLLECTION_NAME)
+    return info.points_count
+
+
+def get_all_registered_hab_ids() -> list[int]:
+    """Retorna lista de hab_ids que tienen rostro registrado."""
+    all_points = client.scroll(
+        collection_name=COLLECTION_NAME,
+        limit=10000,
+        with_payload=True,
+        with_vectors=False
+    )
+    return [p.payload["hab_id"] for p in all_points[0]]
+```
+
+#### mqtt_client.py
+
+```python
+import paho.mqtt.client as mqtt
+from .config import MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS
+
+_client = None
+
+
+def get_mqtt_client() -> mqtt.Client:
+    """Retorna cliente MQTT conectado al broker EMQX."""
+    global _client
+    if _client is None or not _client.is_connected():
+        _client = mqtt.Client(client_id="face-service")
+        _client.username_pw_set(MQTT_USER, MQTT_PASS)
+        _client.connect(MQTT_HOST, MQTT_PORT, keepalive=60)
+        _client.loop_start()
+    return _client
+
+
+def publish_identification(device_serie: str, hab_id: int):
+    """
+    Publica la identificación facial por MQTT.
+    Usa el mismo topic que los ESP32 para que el backend
+    lo procese igual que un tag RFID.
+    """
+    client = get_mqtt_client()
+    # Publicar en el mismo topic que usa el ESP32 para préstamos
+    client.publish(f"{device_serie}/loan_queryu", str(hab_id))
+
+
+def publish_face_status(device_serie: str, status: str):
+    """Publica estado del reconocimiento facial."""
+    client = get_mqtt_client()
+    client.publish(f"{device_serie}/face_status", status)
+```
+
+#### main.py
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+import numpy as np
+import cv2
+import io
+
+from .config import SIMILARITY_THRESHOLD
+from .camera import capture_frame, frame_to_jpeg
+from .face_engine import get_embedding, get_all_faces, get_face_with_pose
+from .vector_store import (
+    init_collection, register_face, search_face,
+    delete_face, get_registered_count, get_all_registered_hab_ids
+)
+from .mqtt_client import publish_identification, publish_face_status
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Inicializa Qdrant al arrancar."""
+    init_collection()
+    yield
+
+app = FastAPI(
+    title="SmartLabs Face Service",
+    description="Reconocimiento facial para préstamo de herramientas",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+
+# ──────────────────────────────────────
+# Modelos
+# ──────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    hab_id: int
+
+class CapturePositionRequest(BaseModel):
+    hab_id: int
+    position: str  # "frontal", "izquierda", "derecha", "arriba", "abajo"
+
+class IdentifyResponse(BaseModel):
+    hab_id: int
+    score: float
+    method: str = "face"
+
+class RegisterResponse(BaseModel):
+    status: str
+    hab_id: int
+    message: str
+    vectors_count: int = 1
+    positions: list[str] = []
+
+# Posiciones requeridas para el registro guiado
+REQUIRED_POSITIONS = [
+    {"id": "frontal",   "label": "Mirando de frente",             "icon": "⬤"},
+    {"id": "izquierda", "label": "Girando ligeramente a la izquierda", "icon": "◀"},
+    {"id": "derecha",   "label": "Girando ligeramente a la derecha",   "icon": "▶"},
+    {"id": "arriba",    "label": "Mirando ligeramente hacia arriba",   "icon": "▲"},
+    {"id": "abajo",     "label": "Mirando ligeramente hacia abajo",    "icon": "▼"},
+]
+
+# Almacén temporal de capturas en progreso (en memoria)
+# Clave: hab_id, Valor: {position: embedding}
+_registration_sessions: dict[int, dict[str, list[float]]] = {}
+
+
+# ──────────────────────────────────────
+# Endpoints
+# ──────────────────────────────────────
+
+@app.get("/health")
+def health():
+    """Health check."""
+    return {
+        "status": "ok",
+        "registered_faces": get_registered_count()
+    }
+
+
+@app.get("/register/positions")
+def get_positions():
+    """
+    Retorna las posiciones requeridas para el registro guiado.
+    El dashboard las usa para mostrar la barra de progreso.
+    """
+    return {
+        "positions": REQUIRED_POSITIONS,
+        "total": len(REQUIRED_POSITIONS)
+    }
+
+
+@app.post("/register/start")
+def register_start(request: RegisterRequest):
+    """
+    Inicia una sesión de registro guiado para un empleado.
+    Limpia cualquier sesión anterior y prepara para capturar las 5 posiciones.
+    """
+    _registration_sessions[request.hab_id] = {}
+    return {
+        "status": "started",
+        "hab_id": request.hab_id,
+        "positions_required": REQUIRED_POSITIONS,
+        "message": "Sesión de registro iniciada. Capture cada posición."
+    }
+
+
+@app.get("/register/poll/{hab_id}")
+def register_poll(hab_id: int):
+    """
+    CAPTURA AUTOMÁTICA — El dashboard llama este endpoint cada 500ms.
+    
+    El face-service analiza el frame actual, detecta en qué posición está
+    el rostro (frontal, izquierda, derecha, arriba, abajo) y si es una
+    posición que aún no se ha capturado, la captura AUTOMÁTICAMENTE.
+    
+    El empleado solo tiene que mover la cabeza. No hay botones.
+    
+    Flujo tipo app de banco:
+    1. Dashboard hace polling: GET /register/poll/45 cada 500ms
+    2. El face-service captura frame → detecta pose → determina posición
+    3. Si la posición aún no se capturó → guarda embedding automáticamente
+    4. Retorna estado actual: qué posiciones ya se tienen, cuáles faltan, progreso
+    5. Cuando todas están capturadas → ready_to_commit = true
+    """
+    if hab_id not in _registration_sessions:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay sesión de registro activa. Llame primero a /register/start"
+        )
+
+    # Capturar frame
+    try:
+        frame = capture_frame()
+    except Exception as e:
+        return {
+            "status": "no_camera",
+            "message": "No se pudo conectar a la cámara",
+            "captured": list(_registration_sessions[hab_id].keys()),
+            "pending": [p["id"] for p in REQUIRED_POSITIONS 
+                       if p["id"] not in _registration_sessions[hab_id]],
+            "progress_percent": int(len(_registration_sessions[hab_id]) / len(REQUIRED_POSITIONS) * 100),
+            "ready_to_commit": False,
+            "current_pose": None,
+            "current_position": None
+        }
+
+    # Detectar rostro + pose + posición
+    result = get_face_with_pose(frame)
+
+    if result is None:
+        captured = list(_registration_sessions[hab_id].keys())
+        return {
+            "status": "no_face",
+            "message": "No se detecta rostro — acérquese a la cámara",
+            "captured": captured,
+            "pending": [p["id"] for p in REQUIRED_POSITIONS if p["id"] not in captured],
+            "progress_percent": int(len(captured) / len(REQUIRED_POSITIONS) * 100),
+            "ready_to_commit": False,
+            "current_pose": None,
+            "current_position": None
+        }
+
+    detected_position = result["position"]
+    pose = result["pose"]
+    captured = _registration_sessions[hab_id]
+    just_captured = None
+
+    # Si la posición detectada es válida y AÚN NO se ha capturado → captura automática
+    if detected_position is not None and detected_position not in captured:
+        captured[detected_position] = result["embedding"].tolist()
+        just_captured = detected_position
+
+    captured_list = list(captured.keys())
+    pending_list = [p["id"] for p in REQUIRED_POSITIONS if p["id"] not in captured_list]
+    progress = len(captured_list) / len(REQUIRED_POSITIONS)
+
+    # Determinar instrucción para el empleado
+    if len(pending_list) == 0:
+        instruction = "¡Listo! Todas las posiciones capturadas"
+        instruction_icon = "✓"
+    else:
+        next_pos = pending_list[0]
+        pos_instructions = {
+            "frontal":   {"text": "Mire de frente a la cámara",         "icon": "⬤"},
+            "izquierda": {"text": "Gire la cabeza a la izquierda",      "icon": "◀"},
+            "derecha":   {"text": "Gire la cabeza a la derecha",        "icon": "▶"},
+            "arriba":    {"text": "Mire ligeramente hacia arriba",      "icon": "▲"},
+            "abajo":     {"text": "Mire ligeramente hacia abajo",       "icon": "▼"},
+        }
+        instruction = pos_instructions[next_pos]["text"]
+        instruction_icon = pos_instructions[next_pos]["icon"]
+
+    return {
+        "status": "captured" if just_captured else "waiting",
+        "just_captured": just_captured,  # None si no capturó nada, o "frontal", etc.
+        "message": f"Capturado: {just_captured}" if just_captured else instruction,
+        "instruction": instruction,
+        "instruction_icon": instruction_icon,
+        "captured": captured_list,
+        "pending": pending_list,
+        "progress": round(progress, 2),
+        "progress_percent": int(progress * 100),
+        "ready_to_commit": len(pending_list) == 0,
+        "current_pose": pose,           # {yaw: 15.2, pitch: -3.1}
+        "current_position": detected_position  # qué posición detecta ahora mismo
+    }
+
+
+@app.post("/register/commit", response_model=RegisterResponse)
+def register_commit(request: RegisterRequest):
+    """
+    Finaliza el registro: toma todos los embeddings capturados y los guarda
+    en Qdrant como múltiples vectores vinculados al mismo hab_id.
+
+    Solo se puede llamar cuando TODAS las posiciones han sido capturadas.
+    Si se quiere registrar con menos posiciones (mínimo 3), usar force=True.
+    """
+    if request.hab_id not in _registration_sessions:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay sesión de registro activa."
+        )
+
+    session = _registration_sessions[request.hab_id]
+    captured_positions = list(session.keys())
+
+    # Mínimo 3 posiciones para un registro válido
+    if len(captured_positions) < 3:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Se necesitan al menos 3 posiciones. "
+                   f"Capturadas: {len(captured_positions)} ({captured_positions})"
+        )
+
+    # Guardar todos los embeddings en Qdrant
+    embeddings = list(session.values())
+    result = register_face(request.hab_id, embeddings, captured_positions)
+
+    # Limpiar la sesión temporal
+    del _registration_sessions[request.hab_id]
+
+    return RegisterResponse(
+        status="ok",
+        hab_id=request.hab_id,
+        message=f"Rostro registrado con {len(captured_positions)} posiciones: {', '.join(captured_positions)}",
+        vectors_count=len(captured_positions),
+        positions=captured_positions
+    )
+
+
+@app.post("/register/cancel")
+def register_cancel(request: RegisterRequest):
+    """Cancela una sesión de registro en progreso."""
+    if request.hab_id in _registration_sessions:
+        del _registration_sessions[request.hab_id]
+    return {"status": "cancelled", "hab_id": request.hab_id}
+
+
+@app.post("/register-upload", response_model=RegisterResponse)
+async def register_upload(hab_id: int, file: UploadFile = File(...)):
+    """
+    Registra un rostro desde una imagen subida (alternativa a la cámara).
+    Útil para registrar empleados que no están frente a la cámara.
+    Solo genera 1 vector (la foto subida). Menos preciso que el registro guiado.
+    """
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if frame is None:
+        raise HTTPException(status_code=400, detail="No se pudo decodificar la imagen")
+
+    embedding = get_embedding(frame)
+    if embedding is None:
+        raise HTTPException(status_code=400, detail="No se detectó rostro en la imagen")
+
+    result = register_face(hab_id, [embedding.tolist()], ["foto_manual"])
+
+    return RegisterResponse(
+        status="ok",
+        hab_id=hab_id,
+        message=f"Rostro registrado desde foto manual para hab_id {hab_id}",
+        vectors_count=1,
+        positions=["foto_manual"]
+    )
+
+
+@app.post("/identify", response_model=IdentifyResponse)
+def identify(device_serie: str = "SMART10003"):
+    """
+    Identifica a un empleado por su rostro.
+
+    1. Captura frame de la cámara
+    2. Genera embedding
+    3. Busca en Qdrant el más similar
+    4. Si supera el threshold, publica por MQTT (mismo flujo que tag RFID)
+    """
+    # Capturar
+    try:
+        frame = capture_frame()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error cámara: {str(e)}")
+
+    # Embedding
+    embedding = get_embedding(frame)
+    if embedding is None:
+        publish_face_status(device_serie, "no_face")
+        raise HTTPException(status_code=400, detail="No se detectó rostro")
+
+    # Buscar en Qdrant
+    match = search_face(embedding.tolist(), threshold=SIMILARITY_THRESHOLD)
+    if match is None:
+        publish_face_status(device_serie, "no_match")
+        raise HTTPException(
+            status_code=404,
+            detail="Rostro no reconocido. Registre al empleado primero."
+        )
+
+    # ¡Identificado! Publicar por MQTT igual que un tag RFID
+    publish_identification(device_serie, match["hab_id"])
+
+    return IdentifyResponse(
+        hab_id=match["hab_id"],
+        score=match["score"]
+    )
+
+
+@app.get("/camera/snapshot")
+def camera_snapshot():
+    """
+    Retorna una imagen en vivo de la cámara.
+    Útil para el dashboard de registro de rostros.
+    """
+    try:
+        frame = capture_frame()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error cámara: {str(e)}")
+
+    jpeg = frame_to_jpeg(frame)
+    return StreamingResponse(io.BytesIO(jpeg), media_type="image/jpeg")
+
+
+@app.get("/camera/detect")
+def camera_detect():
+    """
+    Captura un frame y retorna los rostros detectados con bounding boxes.
+    Útil para el dashboard: muestra dónde está el rostro antes de registrar.
+    """
+    try:
+        frame = capture_frame()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Error cámara: {str(e)}")
+
+    faces = get_all_faces(frame)
+    return {
+        "faces_detected": len(faces),
+        "faces": [{"bbox": f["bbox"], "det_score": f["det_score"]} for f in faces]
+    }
+
+
+@app.delete("/face/{hab_id}")
+def remove_face(hab_id: int):
+    """Elimina el rostro registrado de un empleado."""
+    deleted = delete_face(hab_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"No hay rostro registrado para hab_id {hab_id}")
+    return {"status": "deleted", "hab_id": hab_id}
+
+
+@app.get("/faces")
+def list_faces():
+    """Lista todos los hab_id que tienen rostro registrado."""
+    hab_ids = get_all_registered_hab_ids()
+    return {
+        "total": len(hab_ids),
+        "hab_ids": hab_ids
+    }
+```
+
+---
+
+## Docker Compose — Servicios Nuevos
+
+Agregar al `docker-compose.yml` existente:
+
+```yaml
+services:
+  # ... servicios existentes (mariadb, emqx, php-apache, etc.) ...
+
+  # ========== NUEVO: Base de datos vectorial ==========
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: smartlabs-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - smartlabs-network
+
+  # ========== NUEVO: Servicio de reconocimiento facial ==========
+  face-service:
+    build:
+      context: ./face-service
+      dockerfile: Dockerfile
+    container_name: smartlabs-face-service
+    environment:
+      - RTSP_URL=${RTSP_URL:-rtsp://usuario:pass@192.168.0.50:554/stream2}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - MQTT_HOST=emqx
+      - MQTT_PORT=1883
+      - MQTT_USER=${MQTT_USER:-emqxuser}
+      - MQTT_PASS=${MQTT_PASS:-emqxpass}
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.6}
+    ports:
+      - "8500:8500"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      emqx:
+        condition: service_started
+    restart: always
+    networks:
+      - smartlabs-network
+
+volumes:
+  # ... volúmenes existentes ...
+  qdrant-data:    # NUEVO
+```
+
+---
+
+## Variables de entorno (.env)
+
+Agregar al archivo `.env`:
+
+```env
+# ========== Reconocimiento Facial ==========
+# URL RTSP de la cámara Tapo C210 (cambiar IP, usuario y contraseña)
+RTSP_URL=rtsp://usuario:contraseña@192.168.0.50:554/stream2
+
+# Umbral de similitud (0.0 a 1.0)
+# 0.6 = recomendado (buen balance seguridad/comodidad)
+# 0.7 = más estricto (menos falsos positivos)
+# 0.5 = más permisivo (menos falsos negativos)
+SIMILARITY_THRESHOLD=0.6
+```
+
+---
+
+## Configuración de la Cámara Tapo C210
+
+### Paso 1 — Conectar la cámara al WiFi del lab
+
+1. Descargar la app **Tapo** en un celular (iOS o Android).
+2. Crear cuenta Tapo o iniciar sesión.
+3. Agregar dispositivo → Cámaras → Tapo C210.
+4. Seguir el asistente para conectarla al WiFi del **router local del lab** (no al WiFi del Tec).
+5. La cámara debe estar en la misma red que el servidor (192.168.0.x).
+
+### Paso 2 — Configurar RTSP
+
+1. En la app Tapo, ir a la cámara → ⚙️ → **Configuración avanzada** → **Cuenta de la cámara**.
+2. Crear un usuario y contraseña para acceso RTSP.
+3. Anotar la IP de la cámara (visible en la app o en la tabla DHCP del router).
+4. Asignar IP fija en el router (recomendado): 192.168.0.50.
+
+### Paso 3 — Verificar stream
+
+```bash
+# Desde el servidor del lab
+# Instalar ffmpeg si no está instalado
+sudo apt install ffmpeg
+
+# Probar captura de un frame
+ffmpeg -i "rtsp://usuario:contraseña@192.168.0.50:554/stream2" -frames:v 1 test_camera.jpg
+
+# Si genera test_camera.jpg, la cámara está lista
+```
+
+### Ubicación recomendada
+
+- Montar la cámara a la altura del rostro (1.5 - 1.7 m) apuntando hacia donde el empleado se para para hacer préstamos.
+- Distancia óptima: 0.5 - 2 metros del rostro.
+- Iluminación: funciona con luz normal del lab. La visión nocturna IR también funciona pero la calidad de los embeddings es ligeramente menor.
+
+---
+
+## Registro de Rostros — Interfaz en el Dashboard PHP
+
+Se agrega una nueva sección al dashboard PHP existente. Esta sección es exclusiva para el administrador y permite registrar, verificar y eliminar rostros de los empleados.
+
+### Descripción de la interfaz
+
+La pantalla se divide en dos paneles:
+
+**Panel izquierdo — Lista de empleados:**
+- Muestra todos los empleados de la tabla `habintants`.
+- Cada empleado aparece como una fila con su nombre, matrícula, tag RFID (si tiene) y un indicador visual de estado:
+  - Círculo verde = rostro registrado en Qdrant.
+  - Círculo gris = sin rostro registrado.
+- Incluye un buscador por nombre o matrícula para filtrar la lista.
+- Al hacer clic en un empleado, se selecciona y el panel derecho muestra su información.
+- La lista se obtiene con una consulta a MariaDB (`SELECT * FROM habintants`) cruzada con el endpoint `GET /faces` del face-service (que retorna los `hab_id` que ya tienen rostro en Qdrant).
+
+**Panel derecho — Registro guiado de rostro (multi-posición):**
+
+El registro no es una sola foto. El sistema guía al empleado por 5 posiciones diferentes para capturar su rostro desde varios ángulos. Esto genera 5 vectores (embeddings) por empleado, lo que mejora enormemente el reconocimiento en condiciones reales (el empleado no siempre mira de frente a la cámara).
+
+Las 5 posiciones son:
+1. **Frontal** — mirando directamente a la cámara
+2. **Izquierda** — girando la cabeza ligeramente a la izquierda (~20-30°)
+3. **Derecha** — girando la cabeza ligeramente a la derecha (~20-30°)
+4. **Arriba** — mirando ligeramente hacia arriba (~15-20°)
+5. **Abajo** — mirando ligeramente hacia abajo (~15-20°, como viendo el celular)
+
+La interfaz muestra:
+- La vista en vivo de la cámara Tapo C210 (imagen que se refresca cada segundo).
+- Un indicador de detección de rostro ("1 rostro detectado" / "No se detecta rostro").
+- Una **barra de progreso** que se va llenando conforme se captura cada posición (0% → 20% → 40% → 60% → 80% → 100%).
+- La **instrucción actual** para el empleado: "Mire de frente", "Gire a la izquierda", etc. Con un ícono visual de la dirección.
+- Un botón **"Capturar"** que toma la foto de la posición actual y avanza a la siguiente.
+- Indicadores de las 5 posiciones mostrando cuáles ya se capturaron (verde) y cuáles faltan (gris).
+- Cuando las 5 posiciones están capturadas (barra al 100%), aparece el botón **"Finalizar registro"** que guarda los 5 vectores en Qdrant.
+- Un botón **"Cancelar"** para abortar el registro si es necesario.
+- Un botón **"Subir foto manual"** como alternativa para empleados ausentes (genera solo 1 vector, menos preciso).
+- Debajo muestra el estado del empleado: tag RFID, matrícula, cuántos vectores tiene registrados y de qué posiciones.
+- Un botón rojo **"Eliminar rostro"** borra todos los vectores del empleado de Qdrant.
+
+### Flujo paso a paso — captura automática (tipo app de banco)
+
+El registro es automático. El admin solo hace un clic para iniciar, y el empleado solo mueve la cabeza. No hay botones de "capturar" — el sistema detecta la posición del rostro y captura solo cuando está bien posicionado.
+
+1. El admin abre la sección "Registro Facial" y hace clic en "Ana Torres".
+2. Hace clic en **"Iniciar registro"** (único clic necesario). Esto llama a `POST /register/start`.
+3. El dashboard comienza a hacer **polling automático cada 500ms** a `GET /register/poll/45`.
+4. La pantalla muestra la instrucción: **"⬤ Mire de frente a la cámara"**.
+5. Ana mira de frente. El face-service detecta que el yaw y pitch están dentro del rango "frontal" → **captura automáticamente** el embedding → flash verde en la pantalla + sonido de confirmación.
+6. La barra avanza a **20%**. El indicador "frontal" cambia a verde.
+7. La instrucción cambia a: **"◀ Gire la cabeza a la izquierda"**.
+8. Ana gira la cabeza. Cuando el face-service detecta yaw entre -12° y -40° → **captura automática** → flash verde.
+9. La barra avanza a **40%**. Siguiente instrucción: **"▶ Gire a la derecha"**.
+10. Se repite automáticamente con derecha (60%), arriba (80%) y abajo (100%).
+11. Cuando las 5 posiciones están capturadas, el sistema llama automáticamente a `POST /register/commit` → los 5 vectores se guardan en Qdrant.
+12. La pantalla muestra **"¡Registro completo!"** con sonido de éxito. El indicador de Ana cambia a verde.
+13. Todo el proceso toma ~15-30 segundos.
+
+**¿Cómo detecta la posición automáticamente?** El face-service usa los 5 landmarks del rostro (ojos, nariz, boca) para calcular el ángulo de la cabeza. Si la nariz se desplaza a la izquierda respecto al centro de los ojos → está girando a la derecha. Si la nariz sube → está mirando hacia arriba. Cuando el ángulo cae dentro del rango esperado para una posición que aún no se ha capturado, la captura se ejecuta sola.
+
+**¿Qué pasa si gira demasiado?** Si Ana gira más de 40° (casi de perfil), no cae en ningún rango válido y el sistema simplemente no captura. No hay error, solo sigue esperando. La instrucción en pantalla le guía a moverse un poco menos.
+
+**¿Y si no puede hacer alguna posición?** El mínimo son 3 posiciones. Si Ana no puede mirar hacia arriba (ej: movilidad limitada), el admin puede hacer clic en "Finalizar con las que hay" después de capturar al menos 3.
+
+**Guía visual en tiempo real:** Un punto en pantalla se mueve siguiendo la dirección de la cabeza del empleado (como un joystick). Es verde cuando está en una posición válida, amarillo cuando está entre posiciones. Esto le ayuda al empleado a saber cuánto girar.
+
+### Flujo con foto manual (empleado ausente)
+
+1. El admin selecciona a Roberto García en la lista.
+2. Roberto no está en el lab, pero el admin tiene una foto reciente.
+3. Hace clic en **"Subir foto manual"**.
+4. Selecciona la foto desde su computadora.
+5. El face-service procesa la imagen, genera 1 embedding y lo guarda en Qdrant.
+6. Roberto queda registrado con 1 solo vector (menos preciso que el registro guiado de 5 posiciones, pero funcional).
+7. Se recomienda hacer el registro guiado completo cuando Roberto esté disponible.
+
+### Cómo el dashboard PHP se comunica con el face-service
+
+El dashboard PHP no procesa imágenes ni genera embeddings — toda la lógica pesada la hace el contenedor `face-service`. El PHP solo hace llamadas HTTP internas (dentro de la red Docker) a los endpoints del face-service.
+
+**Mostrar imagen en vivo de la cámara (HTML + JavaScript):**
+```html
+<!-- La imagen se refresca cada segundo para simular video en vivo -->
+<img src="http://face-service:8500/camera/snapshot" 
+     id="camera-preview" 
+     style="width: 640px; height: 480px;"
+     alt="Vista de cámara">
+
+<script>
+// Refrescar la imagen cada segundo para vista "en vivo"
+setInterval(() => {
+    const img = document.getElementById('camera-preview');
+    img.src = 'http://face-service:8500/camera/snapshot?' + Date.now();
+}, 1000);
+</script>
+```
+
+**Registro automático tipo app de banco (JavaScript del dashboard):**
+```javascript
+// === REGISTRO AUTOMÁTICO — SIN BOTONES ===
+// El empleado solo mueve la cabeza. El sistema detecta la posición
+// automáticamente y captura cuando está en buena posición.
+
+let habId = null;
+let pollingInterval = null;
+
+// 1. Iniciar registro — solo se hace clic una vez
+async function startRegistration(hab_id) {
+    habId = hab_id;
+
+    // Iniciar sesión en el face-service
+    await fetch('/face-service/register/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({hab_id: habId})
+    });
+
+    // Comenzar polling cada 500ms — la captura es automática
+    pollingInterval = setInterval(pollRegistration, 500);
+    
+    showInstruction("Mire de frente a la cámara", "⬤");
+    updateProgressBar(0);
+}
+
+// 2. Polling automático — se llama cada 500ms
+async function pollRegistration() {
+    try {
+        const response = await fetch(`/face-service/register/poll/${habId}`);
+        const data = await response.json();
+
+        // Actualizar barra de progreso
+        updateProgressBar(data.progress_percent);
+
+        // Actualizar indicadores de posición
+        data.captured.forEach(pos => markPositionDone(pos));
+
+        // Si acaba de capturar una posición → feedback visual
+        if (data.just_captured) {
+            showCaptureFlash();  // Flash verde en la pantalla
+            playSound('capture');  // Sonido corto de confirmación
+        }
+
+        // Mostrar instrucción para la siguiente posición
+        showInstruction(data.instruction, data.instruction_icon);
+
+        // Mostrar en qué posición está la cara AHORA MISMO
+        // (para guiar al empleado en tiempo real)
+        updatePoseIndicator(data.current_pose, data.current_position);
+
+        // ¿Terminó? → guardar automáticamente
+        if (data.ready_to_commit) {
+            clearInterval(pollingInterval);
+            await commitRegistration();
+        }
+
+    } catch (error) {
+        console.error('Error en polling:', error);
+    }
+}
+
+// 3. Guardar los 5 vectores — se ejecuta automáticamente al completar
+async function commitRegistration() {
+    const response = await fetch('/face-service/register/commit', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({hab_id: habId})
+    });
+    const data = await response.json();
+
+    if (response.ok) {
+        showSuccess(`¡Registro completo! ${data.vectors_count} posiciones guardadas.`);
+        playSound('success');
+        refreshEmployeeList();
+    }
+}
+
+// 4. Cancelar — el único botón manual
+async function cancelRegistration() {
+    clearInterval(pollingInterval);
+    await fetch('/face-service/register/cancel', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({hab_id: habId})
+    });
+    resetUI();
+}
+
+// ── Helpers de UI ──
+
+function updateProgressBar(percent) {
+    const bar = document.getElementById('progress-bar');
+    bar.style.width = percent + '%';
+    bar.style.transition = 'width 0.3s ease';
+    document.getElementById('progress-text').textContent = percent + '%';
+}
+
+function showInstruction(text, icon) {
+    document.getElementById('instruction-icon').textContent = icon || '';
+    document.getElementById('instruction-text').textContent = text;
+}
+
+function markPositionDone(positionId) {
+    const el = document.getElementById('pos-' + positionId);
+    if (el) {
+        el.classList.add('done');         // Cambia a verde
+        el.querySelector('.check').textContent = '✓';
+    }
+}
+
+function showCaptureFlash() {
+    // Flash verde breve en el borde de la cámara — feedback que se capturó
+    const camera = document.getElementById('camera-preview');
+    camera.style.outline = '4px solid #34a853';
+    setTimeout(() => { camera.style.outline = 'none'; }, 300);
+}
+
+function updatePoseIndicator(pose, detectedPosition) {
+    // Muestra una guía visual de hacia dónde está mirando el empleado
+    // pose = {yaw: 15.2, pitch: -3.1}
+    if (!pose) return;
+    
+    const dot = document.getElementById('pose-dot');
+    // Mapear yaw/pitch a posición del punto en un cuadrado de guía
+    const x = 50 + (pose.yaw / 40) * 40;   // -40° a +40° → 10% a 90%
+    const y = 50 + (pose.pitch / 40) * 40;
+    dot.style.left = Math.max(5, Math.min(95, x)) + '%';
+    dot.style.top = Math.max(5, Math.min(95, y)) + '%';
+    
+    // Color: verde si está en una posición válida, amarillo si está entre posiciones
+    dot.style.background = detectedPosition ? '#34a853' : '#f9ab00';
+}
+```
+
+**Experiencia del empleado:** El admin hace clic en "Iniciar registro" y le dice al empleado "mira la cámara y sigue las instrucciones en pantalla". La pantalla le muestra "Mire de frente" → el empleado mira → flash verde + sonido → "Gire a la izquierda" → gira → flash → así hasta completar las 5 posiciones. Cuando termina, se guardan automáticamente. El empleado no toca nada, el admin no toca nada. Solo un clic para iniciar y la cabeza del empleado hace el resto.
+
+**Verificar qué empleados tienen rostro registrado (PHP):**
+```php
+// Obtener lista de hab_ids con rostro en Qdrant
+$ch = curl_init('http://face-service:8500/faces');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = json_decode(curl_exec($ch));
+curl_close($ch);
+
+// $response->total = 12
+// $response->hab_ids = [42, 43, 44, 45, ...]
+// Cruzar con la lista de habintants para mostrar indicadores verde/gris
+```
+
+**Eliminar rostro (PHP):**
+```php
+// El admin hace clic en "Eliminar rostro" para hab_id = 42
+$ch = curl_init('http://face-service:8500/face/42');
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = json_decode(curl_exec($ch));
+curl_close($ch);
+
+// $response->status = "deleted"
+```
+
+**Verificar detección de rostro antes de registrar (JavaScript):**
+```javascript
+// Verificar si la cámara detecta un rostro antes de habilitar el botón
+async function checkFaceDetection() {
+    const response = await fetch('http://face-service:8500/camera/detect');
+    const data = await response.json();
+    
+    const indicator = document.getElementById('detection-indicator');
+    const registerBtn = document.getElementById('register-btn');
+    
+    if (data.faces_detected >= 1) {
+        indicator.textContent = data.faces_detected + ' rostro(s) detectado(s)';
+        indicator.style.color = 'green';
+        registerBtn.disabled = false;
+    } else {
+        indicator.textContent = 'No se detecta rostro';
+        indicator.style.color = 'red';
+        registerBtn.disabled = true;
+    }
+}
+
+// Verificar cada segundo
+setInterval(checkFaceDetection, 1000);
+```
+
+### Endpoints del face-service usados por el dashboard
+
+**Registro automático (multi-posición):**
+
+| Método | Endpoint | Uso en dashboard |
+|--------|----------|------------------|
+| `GET` | `/register/positions` | Obtener la lista de posiciones requeridas (para construir la barra de progreso) |
+| `POST` | `/register/start` | Iniciar sesión de registro (único clic del admin) |
+| `GET` | `/register/poll/{hab_id}` | **Polling cada 500ms** — detecta posición automáticamente, captura si es nueva, retorna progreso, instrucción y pose en tiempo real |
+| `POST` | `/register/commit` | Finalizar: guarda los vectores en Qdrant (se llama automáticamente al completar, o manual si hay 3+ posiciones) |
+| `POST` | `/register/cancel` | Cancelar la sesión de registro en progreso |
+| `POST` | `/register-upload` | Alternativa: registrar desde foto subida (1 solo vector, menos preciso) |
+
+**Cámara y consulta:**
+
+| Método | Endpoint | Uso en dashboard |
+|--------|----------|------------------|
+| `GET` | `/camera/snapshot` | Mostrar imagen en vivo de la cámara (tag `<img>` con refresh cada segundo) |
+| `GET` | `/camera/detect` | Verificar que hay un rostro antes de habilitar el botón de captura |
+| `GET` | `/faces` | Lista de `hab_id` con rostro registrado (para indicadores verde/gris) |
+| `DELETE` | `/face/{hab_id}` | Eliminar todos los vectores de un empleado (todas las posiciones) |
+| `POST` | `/identify` | Probar identificación en vivo (testing del admin) |
+| `GET` | `/health` | Verificar que el face-service está activo y cuántos rostros hay |
+
+### Integración en el MVC existente
+
+El dashboard PHP ya sigue un patrón MVC. Para agregar la sección de registro facial se necesitan:
+
+- **Vista nueva:** `views/face_register.php` — el HTML con los dos paneles (lista de empleados + cámara).
+- **Controlador nuevo:** `app/Controllers/FaceController.php` — maneja las llamadas al face-service via curl.
+- **Ruta nueva:** Agregar la ruta en el sistema de rutas existente apuntando al nuevo controlador.
+- **Menú:** Agregar un enlace "Registro Facial" en el menú lateral del dashboard (solo visible para rol `admin`).
+
+No se modifica ningún modelo existente ni la base de datos MariaDB. Todo el almacenamiento de embeddings lo maneja Qdrant a través del face-service.
+
+---
+
+## Integración con Cloudflare Tunnel
+
+Si ya configuraste Cloudflare Tunnel (ver documento ACCESO_REMOTO_SMARTLABS.md), agregar una ruta para el face-service:
+
+| Subdominio | Dominio | Servicio |
+|---|---|---|
+| `face` | `smartwarehousetecmonterrey.uk` | `http://face-service:8500` |
+
+Esto permite registrar/identificar rostros desde remoto en:
+`https://face.smartwarehousetecmonterrey.uk`
+
+> **⚠️ Seguridad:** Proteger este endpoint con Cloudflare Access. Solo el administrador debería poder registrar/eliminar rostros desde remoto.
+
+---
+
+## Pasos de Implementación (orden recomendado)
+
+### Fase 1 — Infraestructura (1 día)
+1. Configurar la Tapo C210 en el router del lab.
+2. Verificar el stream RTSP desde el servidor.
+3. Agregar Qdrant al docker-compose y levantarlo.
+4. Verificar que Qdrant responde en `http://localhost:6333/healthz`.
+
+### Fase 2 — Face Service (2-3 días)
+5. Crear la carpeta `face-service/` con el código de este documento.
+6. Construir y levantar el contenedor.
+7. Probar `/health` y `/camera/snapshot`.
+8. Registrar un rostro de prueba con `/register`.
+9. Probar identificación con `/identify`.
+
+### Fase 3 — Dashboard (2-3 días)
+10. Agregar sección "Registro Facial" al dashboard PHP.
+11. Integrar vista de cámara en vivo.
+12. Botones de registrar/eliminar rostro.
+13. Indicadores de estado (con/sin rostro).
+
+### Fase 4 — Integración MQTT (1 día)
+14. Verificar que `/identify` publica por MQTT en `{device_serie}/loan_queryu`.
+15. Verificar que el backend procesa la identificación facial igual que un tag RFID.
+16. Probar flujo completo: cara → identificación → préstamo.
+
+### Fase 5 — Pruebas (2-3 días)
+17. Registrar 10-20 empleados reales.
+18. Probar identificación con diferentes condiciones de luz.
+19. Probar con personas no registradas (debe rechazar).
+20. Probar con fotos impresas (InsightFace tiene anti-spoofing básico).
+21. Medir tiempos de respuesta (objetivo: < 2 segundos).
+
+---
+
+## Seguridad y Privacidad
+
+### Datos biométricos
+
+- Los embeddings faciales son vectores numéricos irreversibles — no se puede reconstruir la foto del rostro a partir del vector.
+- Las fotos NO se almacenan. Solo se captura el frame temporalmente para generar el embedding y luego se descarta.
+- Qdrant corre local en el lab, los datos biométricos no salen a internet (a menos que expongas el face-service por Cloudflare Tunnel, lo cual es opcional).
+
+### Recomendaciones
+
+- Informar a los empleados que se está usando reconocimiento facial.
+- Obtener consentimiento por escrito (requerido por la Ley Federal de Protección de Datos Personales en México).
+- No exponer el endpoint `/register` ni `/face/{hab_id}` sin autenticación.
+- Implementar logs de auditoría: quién registró/eliminó rostros y cuándo.
+
+---
+
+## Troubleshooting
+
+### La cámara no conecta
+
+```bash
+# Verificar que la cámara está en la red
+ping 192.168.0.50
+
+# Verificar el stream RTSP
+ffmpeg -i "rtsp://usuario:pass@192.168.0.50:554/stream2" -frames:v 1 test.jpg
+```
+
+- Si no responde al ping: verificar que está conectada al WiFi del router del lab (no al del Tec).
+- Si el ping funciona pero RTSP no: verificar usuario/contraseña RTSP en la app Tapo.
+
+### InsightFace no detecta rostros
+
+- Verificar iluminación del lab.
+- Verificar distancia (0.5 - 2 metros).
+- Probar con `/camera/snapshot` para ver qué está capturando la cámara.
+- Si el modelo tarda en cargar la primera vez, es normal — descarga ~300 MB de modelos.
+
+### Qdrant no responde
+
+```bash
+docker-compose logs qdrant
+curl http://localhost:6333/healthz
+```
+
+### La identificación es incorrecta
+
+- Subir el `SIMILARITY_THRESHOLD` de 0.6 a 0.7 o 0.75.
+- Re-registrar al empleado con mejor iluminación y posición.
+- Registrar múltiples ángulos del mismo empleado (ejecutar `/register` 2-3 veces con el empleado en posiciones ligeramente distintas).
+
+---
+
+## Resumen de Puertos
+
+| Servicio | Puerto | Descripción |
+|----------|--------|-------------|
+| Qdrant API | 6333 | Base de datos vectorial (REST) |
+| Qdrant gRPC | 6334 | Base de datos vectorial (gRPC) |
+| face-service | 8500 | API de reconocimiento facial |
+| Tapo C210 RTSP | 554 | Stream de video de la cámara |
+| Todos los demás | (sin cambios) | MariaDB 3306, EMQX 1883, PHP 80, etc. |
+
+---
+
+*Documento generado el 27 de abril de 2026.*
+*Proyecto: SmartLabs — Smart Warehouse Tec de Monterrey.*
+*Complemento de: ACCESO_REMOTO_SMARTLABS.md*

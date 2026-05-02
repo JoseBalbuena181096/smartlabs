@@ -24,6 +24,15 @@ class Settings(BaseSettings):
     loan_due_hours: int = 8
     inactivity_timeout_seconds: int = 180
 
+    # Reconocimiento facial
+    face_service_token: str = "change-me-face-service-token"
+    face_similarity_threshold: float = 0.6
+    # Bbox width (px) sobre el cual se considera que el usuario está
+    # "cerca" de la cámara y la intención es CERRAR la sesión activa.
+    # En el stream2 (1280x720) de la Tapo C210, ~220px es ~17% del ancho:
+    # corresponde aproximadamente a estar a 60-80cm de la cámara.
+    face_close_bbox_px: float = 220.0
+
     @property
     def database_url(self) -> str:
         return (

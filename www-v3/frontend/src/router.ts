@@ -17,6 +17,7 @@ const routes = [
       { path: "loans", component: () => import("./views/admin/Loans.vue") },
       { path: "stations", component: () => import("./views/admin/Stations.vue") },
       { path: "inventory", component: () => import("./views/admin/Inventory.vue") },
+      { path: "faces", component: () => import("./views/admin/FaceRegister.vue") },
     ],
   },
 

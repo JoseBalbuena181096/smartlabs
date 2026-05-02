@@ -9,7 +9,7 @@ from sqlalchemy import update
 from .db import SessionLocal
 from .models import Station
 from .mqtt.client import run_forever as run_mqtt
-from .routers import areas, auth, health, inventory, loans, stations, tools, users
+from .routers import areas, auth, face, health, inventory, loans, stations, tools, users
 from .ws import admin as ws_admin
 from .ws import station as ws_station
 
@@ -64,6 +64,7 @@ app.include_router(stations.router, prefix="/api")
 app.include_router(loans.router, prefix="/api")
 app.include_router(loans.sessions_router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
+app.include_router(face.router, prefix="/api")
 
 # WebSockets (sin prefix /api porque nginx hace upgrade en /ws)
 app.include_router(ws_admin.router)

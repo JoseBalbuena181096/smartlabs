@@ -16,6 +16,7 @@ const items = [
   { title: "Préstamos", to: "/admin/loans", icon: "mdi-clipboard-list-outline" },
   { title: "Estaciones", to: "/admin/stations", icon: "mdi-radar" },
   { title: "Inventario", to: "/admin/inventory", icon: "mdi-package-variant-closed" },
+  { title: "Rostros", to: "/admin/faces", icon: "mdi-face-recognition" },
 ];
 
 const drawerOpen = ref(true);
